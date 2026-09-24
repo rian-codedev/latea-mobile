@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Light Mode ── */
+    /* --background: 39 84% 92%;           cream lembut (sedikit lebih terang dari #F9E4BC) */
+    --foreground: 120 30% 12%;          /* hijau sangat gelap untuk teks */
+
+    --card: 39 84% 96%;                 /* cream lebih terang untuk card */
+    --card-foreground: 120 30% 12%;
+
+    --popover: 39 84% 96%;
+    --popover-foreground: 120 30% 12%;
+
+    --primary: 120 100% 25%;            /* #008000 — hijau utama */
+    --primary-foreground: 39 84% 96%;   /* cream terang */
+
+    --secondary: 39 60% 80%;            /* cream lebih tua */
+    --secondary-foreground: 120 40% 15%;
+
+    --muted: 39 40% 88%;
+    --muted-foreground: 120 20% 38%;
+
+    --accent: 120 45% 88%;              /* hijau pucat */
+    --accent-foreground: 120 100% 18%;
+
+    --destructive: 0 84% 60%;           /* merah tetap untuk error/delete */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 39 40% 74%;
+    --input: 39 40% 74%;
+    --ring: 120 100% 25%;               /* hijau */
+
+    --radius: 0.625rem;
+
+    /* Chart colors — selaras dengan tema */
+    --chart-1: 120 100% 25%;            /* hijau utama */
+    --chart-2: 39 84% 60%;              /* cream tua / amber */
+    --chart-3: 150 50% 40%;             /* hijau medium */
+    --chart-4: 43 74% 66%;              /* kuning cream */
+    --chart-5: 90 40% 50%;              /* hijau limau */
+  }
+
+  .dark:root {
+    /* ── Dark Mode ── */
+    /* --background: 120 15% 8%;           hijau sangat gelap */
+    --foreground: 39 60% 90%;           /* cream pucat untuk teks */
+
+    --card: 120 15% 11%;
+    --card-foreground: 39 60% 90%;
+
+    --popover: 120 15% 11%;
+    --popover-foreground: 39 60% 90%;
+
+    --primary: 120 60% 45%;             /* hijau lebih terang agar kontras di dark */
+    --primary-foreground: 120 20% 8%;
+
+    --secondary: 120 15% 18%;
+    --secondary-foreground: 39 60% 90%;
+
+    --muted: 120 15% 15%;
+    --muted-foreground: 39 30% 65%;
+
+    --accent: 120 30% 20%;
+    --accent-foreground: 39 60% 90%;
+
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 39 60% 95%;
+
+    --border: 120 15% 20%;
+    --input: 120 15% 20%;
+    --ring: 120 70% 45%;
+
+    --chart-1: 120 60% 45%;
+    --chart-2: 39 70% 55%;
+    --chart-3: 150 40% 50%;
+    --chart-4: 43 60% 60%;
+    --chart-5: 90 35% 55%;
+  }
+}
