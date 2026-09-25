@@ -583,9 +583,9 @@ function Banner({ reduceMotion }: { reduceMotion: boolean }) {
         <Animated.View style={receiptIn}>
           <Animated.View
             style={{
-              alignSelf: 'flex-start',
+              alignSelf: 'flex-end',
               transform: [
-                { rotate: '-2deg' },
+                { rotate: '-3deg' },
                 {
                   translateY: float.interpolate({
                     inputRange: [0, 1],

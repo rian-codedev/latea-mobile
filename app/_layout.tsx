@@ -1,12 +1,16 @@
 import '@/global.css';
 
+import { useEffect, useState } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { NAV_THEME } from '@/lib/theme';
-import { SessionProvider } from '@/lib/session';
+import { SessionProvider, useSession } from '@/lib/session';
 import { ThemeProvider } from 'expo-router/react-navigation';
 import { PortalHost } from '@rn-primitives/portal';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import {
   DMSans_400Regular,
@@ -15,15 +19,24 @@ import {
   DMSans_700Bold,
   DMSans_800ExtraBold,
 } from '@expo-google-fonts/dm-sans';
-import { View, ActivityIndicator } from 'react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useFirstLaunch } from '@/lib/use-first-launch';
+import { LoadingSplash } from '@/lib/loading-splash';
+
+// ⭐ Prevent native splash from auto-hiding
+SplashScreen.preventAutoHideAsync();
 
 export { ErrorBoundary } from 'expo-router';
 
-export default function RootLayout() {
-  const { colorScheme } = useColorScheme();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      retry: 1,
+    },
+  },
+});
 
-  // ⭐ Load semua weight DM Sans
+function RootNavigator() {
   const [fontsLoaded] = useFonts({
     DMSans_400Regular,
     DMSans_500Medium,
@@ -32,35 +45,48 @@ export default function RootLayout() {
     DMSans_800ExtraBold,
   });
 
-  // Tampilkan loading sampai font siap
-  if (!fontsLoaded) {
-    return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" />
-      </View>
-    );
+  const { isFirstLaunch, markLaunched } = useFirstLaunch();
+  const [appReady, setAppReady] = useState(false);
+
+  // ⭐ Hide native splash setelah fonts loaded & first launch check selesai
+  useEffect(() => {
+    if (fontsLoaded && isFirstLaunch !== null) {
+      SplashScreen.hideAsync();
+      // Kasih jeda sedikit agar transisi smooth
+      setTimeout(() => setAppReady(true), 100);
+    }
+  }, [fontsLoaded, isFirstLaunch]);
+
+  // Redirect ke onboarding kalau first install
+  useEffect(() => {
+    if (appReady && isFirstLaunch === true) {
+      router.replace('/(onboarding)' as any);
+    }
+  }, [appReady, isFirstLaunch]);
+
+  // Loading state (selagi fonts & first launch check)
+  if (!fontsLoaded || isFirstLaunch === null) {
+    return <LoadingSplash />;
   }
 
-  const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 menit
-      retry: 1,
-    },
-  },
-});
+  return (
+    <ThemeProvider value={NAV_THEME.light}>
+      <StatusBar style="dark" />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(onboarding)" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(app)" />
+      </Stack>
+      <PortalHost />
+    </ThemeProvider>
+  );
+}
 
+export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
-        <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
-          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(app)" />
-          </Stack>
-          <PortalHost />
-        </ThemeProvider>
+        <RootNavigator />
       </SessionProvider>
     </QueryClientProvider>
   );
