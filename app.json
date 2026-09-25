@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Latea App",
-    "slug": "latea-app",
+    "slug": "latea-pos-mobile",
     "version": "2.2.1",
     "orientation": "default",
     "icon": "./assets/images/icon.webp",
@@ -17,7 +17,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.riyancode.lateaapp"
     },
     "web": {
       "bundler": "metro",
