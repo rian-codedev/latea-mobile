@@ -27,6 +27,7 @@ import {
   ChevronRight,
   AlertTriangle,
   Clock,
+  BarChart3,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useSession } from '@/lib/session';
@@ -34,8 +35,10 @@ import { useProducts } from '@/lib/useProduct';
 import {
   fetchSales,
   fetchSaleDetail,
+  fetchProductSummary,
   type Sale,
   type SaleListItem,
+  type ProductSummaryItem,
 } from '@/lib/api-sales';
 import { ReceiptModal } from '@/lib/receipt-modal';
 import type { ApiProduct } from '@/lib/api-products';
@@ -160,11 +163,17 @@ export default function DashboardScreen() {
     enabled: !!storeId,
   });
 
+  const { data: productSummary = [] } = useQuery({
+    queryKey: ['sales', 'product-summary', storeId, today],
+    queryFn: () => fetchProductSummary({ date_from: today, date_to: today }),
+    enabled: !!storeId,
+  });
+
   const todayStats = useMemo(() => {
     const list = salesToday?.data ?? [];
     const salesTotal = list.reduce((a, s) => a + s.total, 0);
     const transactions = list.length;
-    const itemsSold = list.reduce((a, s) => a + s.items_count, 0);
+    const itemsSold = list.reduce((a, s) => a + (s.total_quantity ?? 0), 0);   // ⭐ FIX
     return { salesTotal, transactions, itemsSold };
   }, [salesToday]);
 
@@ -274,6 +283,7 @@ export default function DashboardScreen() {
                 value={String(todayStats.itemsSold)}
               />
             </View>
+            <ProductSalesCard products={productSummary} />
           </View>
 
           {/* ═══ KOLOM KANAN ═══ */}
@@ -533,9 +543,8 @@ const StartCard = React.memo(function StartCard({
 
   return (
     <View
-      className={`overflow-hidden rounded-3xl border border-border/40 ${
-        large ? 'p-8' : 'p-6'
-      }`}
+      className={`overflow-hidden rounded-3xl border border-border/40 ${large ? 'p-8' : 'p-6'
+        }`}
     >
       <LinearGradient
         colors={WELCOME_GRADIENT_A}
@@ -559,9 +568,8 @@ const StartCard = React.memo(function StartCard({
         </Text>
 
         <Text
-          className={`mt-1 font-dm-extrabold tracking-tight text-foreground ${
-            large ? 'text-4xl' : 'text-3xl'
-          }`}
+          className={`mt-1 font-dm-extrabold tracking-tight text-foreground ${large ? 'text-4xl' : 'text-3xl'
+            }`}
         >
           Mulai transaksi
         </Text>
@@ -634,9 +642,8 @@ const StatCard = React.memo(function StatCard({
 }) {
   return (
     <View
-      className={`min-w-[140px] gap-3 rounded-2xl border border-border/40 bg-white p-4 ${
-        wide ? 'w-full' : 'flex-1'
-      }`}
+      className={`min-w-[140px] gap-3 rounded-2xl border border-border/40 bg-white p-4 ${wide ? 'w-full' : 'flex-1'
+        }`}
     >
       <View className="size-9 items-center justify-center rounded-xl bg-accent/60">
         <Icon as={icon} size={17} className="text-primary" />
@@ -653,6 +660,140 @@ const StatCard = React.memo(function StatCard({
           {value}
         </Text>
       </View>
+    </View>
+  );
+});
+
+/* ══════════════════════════════════════════════════════
+   Product Sales Card — Jumlah terjual per produk
+   ══════════════════════════════════════════════════════ */
+const ProductSalesCard = React.memo(function ProductSalesCard({
+  products,
+}: {
+  products: ProductSummaryItem[];
+}) {
+  const isEmpty = products.length === 0;
+
+  // Ambil max qty untuk progress bar
+  const maxQty = useMemo(
+    () => Math.max(...products.map((p) => Number(p.total_qty)), 1),
+    [products]
+  );
+
+  return (
+    <View className="overflow-hidden rounded-xl border border-border/40 bg-white">
+      {/* ══ Header ══ */}
+      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3">
+        <View className="flex-row items-center gap-2.5">
+          {/* Icon box — sage/green */}
+          <View className="size-7 items-center justify-center rounded-lg bg-primary/10">
+            <Icon as={Package} size={14} className="text-primary" />
+          </View>
+
+          <View>
+            <Text className="font-dm-bold text-xs text-foreground">
+              Produk Terjual
+            </Text>
+            <Text className="font-dm-regular text-[10px] text-muted-foreground">
+              Terurut dari yang paling banyak
+            </Text>
+          </View>
+        </View>
+
+        {/* Count badge */}
+        <View className="rounded-full bg-muted px-2 py-0.5">
+          <Text className="font-mono text-[10px] font-bold text-muted-foreground">
+            {products.length}
+          </Text>
+        </View>
+      </View>
+
+      {/* ══ Body ══ */}
+      {isEmpty ? (
+        <View className="items-center gap-2 px-4 py-10">
+          <Text className="text-3xl">📊</Text>
+          <Text className="text-center font-dm-medium text-xs text-muted-foreground">
+            Belum ada produk terjual hari ini
+          </Text>
+        </View>
+      ) : (
+        <View>
+          {products.map((product, index) => {
+            const qty = Number(product.total_qty);
+            const percentage = (qty / maxQty) * 100;
+
+            return (
+              <View
+                key={product.product_id}
+                className={`flex-row items-center gap-3 px-4 py-2.5 ${
+                  index < products.length - 1
+                    ? 'border-b border-border/30'
+                    : ''
+                }`}
+              >
+                {/* ── Rank badge ── */}
+                <View
+                  className={`size-6 shrink-0 items-center justify-center rounded-full ${
+                    index === 0
+                      ? 'bg-amber-100 dark:bg-amber-950/60'
+                      : index === 1
+                        ? 'bg-stone-200 dark:bg-stone-700'
+                        : index === 2
+                          ? 'bg-orange-100 dark:bg-orange-950/60'
+                          : 'bg-stone-100 dark:bg-stone-800'
+                  }`}
+                >
+                  <Text
+                    className={`font-dm-extrabold text-[10px] ${
+                      index === 0
+                        ? 'text-amber-700 dark:text-amber-400'
+                        : index === 1
+                          ? 'text-stone-700 dark:text-stone-300'
+                          : index === 2
+                            ? 'text-orange-700 dark:text-orange-400'
+                            : 'text-stone-500 dark:text-stone-400'
+                    }`}
+                  >
+                    {index + 1}
+                  </Text>
+                </View>
+
+                {/* ── Info ── */}
+                <View className="min-w-0 flex-1">
+                  {/* Row 1: name + qty */}
+                  <View className="flex-row items-center justify-between gap-2">
+                    <Text
+                      className="flex-1 truncate font-dm-medium text-[11px] text-foreground"
+                      numberOfLines={1}
+                    >
+                      {product.product_name}
+                    </Text>
+                    <Text className="shrink-0 font-mono text-[11px] font-bold text-foreground">
+                      {qty} pcs
+                    </Text>
+                  </View>
+
+                  {/* Row 2: progress bar + revenue */}
+                  <View className="mt-1 flex-row items-center gap-2">
+                    {/* Progress bar */}
+                    <View className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                      <View
+                        style={{ width: `${percentage}%` }}
+                        className="h-full rounded-full bg-primary"
+                      />
+                    </View>
+
+                    {/* Revenue */}
+                    <Text className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                      Rp {Number(product.total_revenue).toLocaleString('id-ID')}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 });
@@ -718,9 +859,8 @@ const RecentCard = React.memo(function RecentCard({
                 onPress={() => onSalePress(t.id)}
                 accessibilityRole="button"
                 accessibilityLabel={`Lihat detail transaksi ${t.invoice_number}`}
-                className={`flex-row items-center gap-3 px-4 py-3 active:bg-muted/40 ${
-                  i < sales.length - 1 ? 'border-b border-border/30' : ''
-                }`}
+                className={`flex-row items-center gap-3 px-4 py-3 active:bg-muted/40 ${i < sales.length - 1 ? 'border-b border-border/30' : ''
+                  }`}
               >
                 <View className="size-10 items-center justify-center rounded-full bg-accent/60">
                   <Icon as={Receipt} size={16} className="text-primary" />
@@ -845,11 +985,10 @@ const ProductListCard = React.memo(function ProductListCard({
             return (
               <View
                 key={p.id}
-                className={`flex-row items-center gap-3 px-4 py-2.5 ${
-                  i < preview.length - 1 || remaining > 0
+                className={`flex-row items-center gap-3 px-4 py-2.5 ${i < preview.length - 1 || remaining > 0
                     ? 'border-b border-border/30'
                     : ''
-                }`}
+                  }`}
               >
                 {/* ⭐ Image — 48x48, dengan error fallback */}
                 <ProductImage uri={p.image_url} emoji={p.emoji} size={48} />

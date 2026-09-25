@@ -38,12 +38,21 @@ export type SaleListItem = {
   sale_date: string;
   total: number;
   items_count: number;
+  total_quantity: number;
   status: string;
 };
 
 export type CreateSaleInput = {
   items: { product_id: number; quantity: number }[];
   payment_amount: number;
+};
+
+export type ProductSummaryItem = {
+  product_id: number;
+  product_name: string;
+  product_code: string;
+  total_qty: number;
+  total_revenue: number;
 };
 
 export async function createSale(input: CreateSaleInput): Promise<Sale> {
@@ -66,5 +75,16 @@ export async function fetchSales(params?: {
 
 export async function fetchSaleDetail(id: number): Promise<Sale> {
   const res = await api.get<{ data: Sale }>(`/sales/${id}`);
+  return res.data.data;
+}
+
+export async function fetchProductSummary(params: {
+  date_from: string;
+  date_to: string;
+}): Promise<ProductSummaryItem[]> {
+  const res = await api.get<{ data: ProductSummaryItem[] }>(
+    '/sales/product-summary',
+    { params }
+  );
   return res.data.data;
 }
