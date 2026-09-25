@@ -16,6 +16,7 @@ import {
   DMSans_800ExtraBold,
 } from '@expo-google-fonts/dm-sans';
 import { View, ActivityIndicator } from 'react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -40,16 +41,27 @@ export default function RootLayout() {
     );
   }
 
+  const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 menit
+      retry: 1,
+    },
+  },
+});
+
   return (
-    <SessionProvider>
-      <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
-        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(app)" />
-        </Stack>
-        <PortalHost />
-      </ThemeProvider>
-    </SessionProvider>
+    <QueryClientProvider client={queryClient}>
+      <SessionProvider>
+        <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(app)" />
+          </Stack>
+          <PortalHost />
+        </ThemeProvider>
+      </SessionProvider>
+    </QueryClientProvider>
   );
 }

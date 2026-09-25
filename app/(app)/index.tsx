@@ -1,15 +1,19 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   ScrollView,
   Pressable,
   StyleSheet,
+  ActivityIndicator,
+  Image,
+  Modal,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import {
@@ -19,49 +23,59 @@ import {
   Banknote,
   Package,
   Tag,
+  Store as StoreIcon,
   ChevronRight,
+  AlertTriangle,
+  Clock,
   type LucideIcon,
 } from 'lucide-react-native';
-import { MOCK_PRODUCTS } from '@/mock/products';
+import { useSession } from '@/lib/session';
+import { useProducts } from '@/lib/useProduct';
+import {
+  fetchSales,
+  fetchSaleDetail,
+  type Sale,
+  type SaleListItem,
+} from '@/lib/api-sales';
+import { ReceiptModal } from '@/lib/receipt-modal';
+import type { ApiProduct } from '@/lib/api-products';
 import { formatRupiah } from '@/lib/format';
 
 /* ══════════════════════════════════════════════════════
    Konstanta
    ══════════════════════════════════════════════════════ */
 const HEADER_HEIGHT = 60;
-
-const CASHIER_NAME = 'Kasir';
-const STORE_NAME = 'Toko Anda';
-
-const TODAY = { sales: 1250000, transactions: 18, itemsSold: 64 };
-const RECENT = [
-  { id: '0018', time: '14:32', items: 3, total: 82000 },
-  { id: '0017', time: '14:10', items: 1, total: 22000 },
-  { id: '0016', time: '13:47', items: 5, total: 146000 },
-  { id: '0015', time: '13:20', items: 2, total: 54000 },
-  { id: '0014', time: '12:58', items: 4, total: 98000 },
-];
-
-const ACTIVE_PRODUCTS = MOCK_PRODUCTS.filter((p) => p.isActive).length;
-const PROMO_PRODUCTS = MOCK_PRODUCTS.filter(
-  (p) => p.isActive && p.discountPrice != null && p.minimalDiscount != null
-).length;
-
-const DATE_LABEL = new Date().toLocaleDateString('id-ID', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-});
+const PRODUCT_PREVIEW_LIMIT = 5;
+const RECENT_ITEM_HEIGHT = 62;   // estimasi tinggi 1 baris
+const RECENT_VISIBLE_ITEMS = 5;
+const RECENT_MAX_HEIGHT = RECENT_ITEM_HEIGHT * RECENT_VISIBLE_ITEMS;
 
 const WELCOME_GRADIENT_A = ['#EEF5F0', '#DCEBE1', '#CBDFD3'] as const;
 const WELCOME_GRADIENT_B = ['#E9F1F4', '#D8E6EC', '#E4EEE7'] as const;
 
+/* ── Helper ── */
 function getGreeting() {
   const h = new Date().getHours();
   if (h < 11) return 'Selamat pagi';
   if (h < 15) return 'Selamat siang';
   if (h < 18) return 'Selamat sore';
   return 'Selamat malam';
+}
+
+function todayString(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 /* ══════════════════════════════════════════════════════
@@ -71,15 +85,139 @@ export default function DashboardScreen() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
-  const isWide = width >= 900;
+  const { user, signOut } = useSession();
 
+  const isWide = width >= 900;
+  const storeId = user?.store_id;
+
+  /* ── User info ── */
+  const cashierName = user?.name ?? 'Kasir';
+  const storeName = user?.store?.name ?? 'Toko';
+  const initial = cashierName.charAt(0).toUpperCase() || 'K';
+
+  /* ── Live date + time (update tiap 30 detik) ── */
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const timeLabel = useMemo(
+    () =>
+      now.toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }),
+    [now]
+  );
+
+  const dayLabel = useMemo(
+    () =>
+      now.toLocaleDateString('id-ID', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+      }),
+    [now]
+  );
+
+  const dateFullLabel = useMemo(
+    () =>
+      now.toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      }),
+    [now]
+  );
+
+  /* ── Produk ── */
+  const { data: products = [] } = useProducts(storeId);
+
+  const activeProducts = useMemo(
+    () => products.filter((p) => p.is_active).length,
+    [products]
+  );
+  const promoProducts = useMemo(
+    () =>
+      products.filter(
+        (p) =>
+          p.is_active &&
+          p.discount_price != null &&
+          p.minimal_discount != null
+      ).length,
+    [products]
+  );
+
+  /* ── Sales hari ini ── */
+  const today = todayString();
+
+  const { data: salesToday } = useQuery({
+    queryKey: ['sales', 'today', storeId, today],
+    queryFn: () => fetchSales({ date_from: today, date_to: today }),
+    enabled: !!storeId,
+  });
+
+  const todayStats = useMemo(() => {
+    const list = salesToday?.data ?? [];
+    const salesTotal = list.reduce((a, s) => a + s.total, 0);
+    const transactions = list.length;
+    const itemsSold = list.reduce((a, s) => a + s.items_count, 0);
+    return { salesTotal, transactions, itemsSold };
+  }, [salesToday]);
+
+  /* ── Recent transactions — HANYA HARI INI ── */
+  const recent = useMemo(
+    () => salesToday?.data ?? [],
+    [salesToday]
+  );
+
+  /* ── Detail transaksi (untuk modal) ── */
+  const [selectedSaleId, setSelectedSaleId] = useState<number | null>(null);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const { data: saleDetail, isLoading: isLoadingDetail } = useQuery({
+    queryKey: ['sale', 'detail', selectedSaleId],
+    queryFn: () => fetchSaleDetail(selectedSaleId!),
+    enabled: !!selectedSaleId,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const handleSalePress = useCallback((saleId: number) => {
+    setSelectedSaleId(saleId);
+  }, []);
+
+  const closeDetail = useCallback(() => {
+    setSelectedSaleId(null);
+  }, []);
+
+  /* ── Handlers ── */
   const openCashier = useCallback(() => {
     router.push('/(app)/cashier');
   }, []);
 
-  const handleLogout = useCallback(() => {
-    // TODO: hapus sesi lalu arahkan ke halaman login
+  const requestLogout = useCallback(() => {
+    setLogoutConfirmOpen(true);
   }, []);
+
+  const confirmLogout = useCallback(async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+    } finally {
+      setIsLoggingOut(false);
+      setLogoutConfirmOpen(false);
+    }
+  }, [signOut, isLoggingOut]);
+
+  const cancelLogout = useCallback(() => {
+    if (isLoggingOut) return;
+    setLogoutConfirmOpen(false);
+  }, [isLoggingOut]);
 
   const scrollContentStyle = useMemo(
     () => ({
@@ -108,11 +246,13 @@ export default function DashboardScreen() {
         contentContainerStyle={scrollContentStyle}
       >
         <View className={isWide ? 'flex-row items-start gap-4' : 'gap-4'}>
+          {/* ═══ KOLOM KIRI ═══ */}
           <View className={isWide ? 'flex-[3] gap-4' : 'gap-4'}>
             <StartCard
               onPress={openCashier}
-              activeProducts={ACTIVE_PRODUCTS}
-              promoProducts={PROMO_PRODUCTS}
+              storeName={storeName}
+              activeProducts={activeProducts}
+              promoProducts={promoProducts}
               large={isWide}
             />
 
@@ -120,24 +260,26 @@ export default function DashboardScreen() {
               <StatCard
                 icon={Banknote}
                 label="Penjualan hari ini"
-                value={formatRupiah(TODAY.sales)}
+                value={formatRupiah(todayStats.salesTotal)}
                 wide
               />
               <StatCard
                 icon={Receipt}
                 label="Transaksi"
-                value={String(TODAY.transactions)}
+                value={String(todayStats.transactions)}
               />
               <StatCard
                 icon={Package}
                 label="Item terjual"
-                value={String(TODAY.itemsSold)}
+                value={String(todayStats.itemsSold)}
               />
             </View>
           </View>
 
-          <View className={isWide ? 'flex-[2]' : ''}>
-            <RecentCard />
+          {/* ═══ KOLOM KANAN ═══ */}
+          <View className={isWide ? 'flex-[2] gap-4' : 'gap-4'}>
+            <RecentCard sales={recent} onSalePress={handleSalePress} />
+            <ProductListCard products={products} />
           </View>
         </View>
       </ScrollView>
@@ -157,7 +299,7 @@ export default function DashboardScreen() {
         >
           <View className="size-10 items-center justify-center rounded-full bg-primary">
             <Text className="font-dm-extrabold text-sm text-primary-foreground">
-              {CASHIER_NAME.charAt(0).toUpperCase()}
+              {initial}
             </Text>
           </View>
 
@@ -169,18 +311,20 @@ export default function DashboardScreen() {
               className="font-dm-bold text-base leading-tight text-foreground"
               numberOfLines={1}
             >
-              {CASHIER_NAME}
+              {cashierName}
             </Text>
           </View>
 
-          {isWide ? (
-            <Text className="font-dm-regular text-xs text-muted-foreground">
-              {DATE_LABEL}
-            </Text>
-          ) : null}
+          {/* ⭐ Modern date + time pill */}
+          <DateTimePill
+            time={timeLabel}
+            dayLabel={dayLabel}
+            fullDate={dateFullLabel}
+            expanded={isWide}
+          />
 
           <Pressable
-            onPress={handleLogout}
+            onPress={requestLogout}
             hitSlop={8}
             accessibilityLabel="Keluar"
             className="size-10 items-center justify-center rounded-full active:bg-muted/60"
@@ -189,20 +333,193 @@ export default function DashboardScreen() {
           </Pressable>
         </View>
       </BlurView>
+
+      {/* ══ DETAIL SALE MODAL — LOADING ══ */}
+      <Modal
+        visible={!!selectedSaleId && isLoadingDetail}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDetail}
+      >
+        <View className="flex-1 items-center justify-center bg-black/40">
+          <View className="items-center gap-3 rounded-2xl bg-white p-6">
+            <ActivityIndicator size="large" />
+            <Text className="font-dm-regular text-xs text-muted-foreground">
+              Memuat detail transaksi...
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ══ DETAIL SALE MODAL — RECEIPT ══ */}
+      <ReceiptModal
+        sale={saleDetail ?? null}
+        visible={!!saleDetail && !isLoadingDetail}
+        onClose={closeDetail}
+      />
+
+      {/* ══ LOGOUT CONFIRMATION MODAL ══ */}
+      <LogoutConfirmModal
+        visible={logoutConfirmOpen}
+        isLoading={isLoggingOut}
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
+      />
     </View>
   );
 }
+
+/* ══════════════════════════════════════════════════════
+   DateTime Pill — Modern Display
+   ══════════════════════════════════════════════════════ */
+const DateTimePill = React.memo(function DateTimePill({
+  time,
+  dayLabel,
+  fullDate,
+  expanded,
+}: {
+  time: string;
+  dayLabel: string;
+  fullDate: string;
+  expanded: boolean;
+}) {
+  if (!expanded) {
+    // ⭐ Mobile: compact pill dengan jam saja
+    return (
+      <View className="flex-row items-center gap-1.5 rounded-full border border-border/40 bg-white/70 px-2.5 py-1.5">
+        <View className="size-1.5 rounded-full bg-primary" />
+        <Text className="font-mono text-[11px] font-bold tracking-tight text-foreground">
+          {time}
+        </Text>
+      </View>
+    );
+  }
+
+  // ⭐ Tablet: pill dengan jam + tanggal
+  return (
+    <View className="flex-row items-center gap-2 rounded-full border border-border/40 bg-white/70 px-3 py-1.5">
+      <Icon as={Clock} size={11} className="text-primary" />
+      <Text className="font-mono text-[11px] font-bold tracking-tight text-foreground">
+        {time}
+      </Text>
+      <View className="h-3 w-px bg-border/60" />
+      <Text className="font-dm-medium text-[10.5px] text-muted-foreground">
+        {fullDate}
+      </Text>
+    </View>
+  );
+});
+
+/* ══════════════════════════════════════════════════════
+   Logout Confirmation Modal
+   ══════════════════════════════════════════════════════ */
+const LogoutConfirmModal = React.memo(function LogoutConfirmModal({
+  visible,
+  isLoading,
+  onConfirm,
+  onCancel,
+}: {
+  visible: boolean;
+  isLoading: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+    >
+      <View className="flex-1 items-center justify-center bg-black/40 px-6">
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onCancel}
+          disabled={isLoading}
+        />
+
+        <View
+          style={{ width: '100%', maxWidth: 360 }}
+          className="overflow-hidden rounded-3xl bg-white"
+        >
+          <View className="items-center gap-3 px-6 pt-6">
+            <View className="size-14 items-center justify-center rounded-full bg-destructive/10">
+              <Icon
+                as={AlertTriangle}
+                size={26}
+                className="text-destructive"
+              />
+            </View>
+
+            <View className="items-center gap-1">
+              <Text className="font-dm-bold text-base text-foreground">
+                Keluar dari aplikasi?
+              </Text>
+              <Text className="text-center font-dm-regular text-xs leading-4 text-muted-foreground">
+                Anda harus login kembali untuk melanjutkan transaksi.
+              </Text>
+            </View>
+          </View>
+
+          <View className="mt-6 flex-row gap-2 border-t border-border/40 bg-muted/30 p-4">
+            <Pressable
+              onPress={onCancel}
+              disabled={isLoading}
+              className="h-11 flex-1 items-center justify-center rounded-full border border-border/60 bg-white active:opacity-80"
+            >
+              <Text className="font-dm-bold text-sm text-foreground">
+                Batal
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={onConfirm}
+              disabled={isLoading}
+              className={
+                isLoading
+                  ? 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-destructive/60'
+                  : 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-destructive active:opacity-90'
+              }
+            >
+              {isLoading ? (
+                <>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text className="font-dm-bold text-sm text-white">
+                    Keluar...
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Icon
+                    as={LogOut}
+                    size={15}
+                    className="text-destructive-foreground"
+                  />
+                  <Text className="font-dm-bold text-sm text-destructive-foreground">
+                    Keluar
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+});
 
 /* ══════════════════════════════════════════════════════
    Start Card
    ══════════════════════════════════════════════════════ */
 const StartCard = React.memo(function StartCard({
   onPress,
+  storeName,
   activeProducts,
   promoProducts,
   large,
 }: {
   onPress: () => void;
+  storeName: string;
   activeProducts: number;
   promoProducts: number;
   large?: boolean;
@@ -242,7 +559,7 @@ const StartCard = React.memo(function StartCard({
 
       <View className="relative">
         <Text className="font-dm-medium text-xs text-muted-foreground">
-          {STORE_NAME}
+          {storeName}
         </Text>
 
         <Text
@@ -338,22 +655,39 @@ const StatCard = React.memo(function StatCard({
 });
 
 /* ══════════════════════════════════════════════════════
-   Recent Card
+   Recent Card — HANYA HARI INI
    ══════════════════════════════════════════════════════ */
-const RecentCard = React.memo(function RecentCard() {
-  const isEmpty = RECENT.length === 0;
+const RecentCard = React.memo(function RecentCard({
+  sales,
+  onSalePress,
+}: {
+  sales: SaleListItem[];
+  onSalePress: (saleId: number) => void;
+}) {
+  const isEmpty = sales.length === 0;
+  const hasMore = sales.length > RECENT_VISIBLE_ITEMS;
 
   return (
     <View className="overflow-hidden rounded-2xl border border-border/40 bg-white">
+      {/* Header */}
       <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3">
         <Text className="font-dm-bold text-sm text-foreground">
-          Transaksi terakhir
+          Transaksi hari ini
         </Text>
-        <Text className="font-dm-regular text-xs text-muted-foreground">
-          Hari ini
-        </Text>
+        {!isEmpty ? (
+          <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5">
+            <Text className="font-dm-bold text-[11px] text-primary-foreground">
+              {sales.length}
+            </Text>
+          </View>
+        ) : (
+          <Text className="font-dm-regular text-xs text-muted-foreground">
+            —
+          </Text>
+        )}
       </View>
 
+      {/* Body */}
       {isEmpty ? (
         <View className="items-center gap-1 px-4 py-10">
           <Text className="text-3xl">🧾</Text>
@@ -361,40 +695,208 @@ const RecentCard = React.memo(function RecentCard() {
             Belum ada transaksi
           </Text>
           <Text className="text-center font-dm-regular text-xs text-muted-foreground">
-            Transaksi yang selesai akan muncul di sini
+            Transaksi hari ini akan muncul di sini
           </Text>
         </View>
       ) : (
-        RECENT.map((t, i) => (
-          <View
-            key={t.id}
-            className={`flex-row items-center gap-3 px-4 py-3 ${
-              i < RECENT.length - 1 ? 'border-b border-border/30' : ''
-            }`}
-          >
-            <View className="size-10 items-center justify-center rounded-full bg-accent/60">
-              <Icon as={Receipt} size={16} className="text-primary" />
-            </View>
+        <ScrollView
+          style={{ maxHeight: RECENT_MAX_HEIGHT }}
+          showsVerticalScrollIndicator={hasMore}
+          nestedScrollEnabled
+          bounces={false}
+        >
+          {sales.map((t, i) => {
+            const shortId =
+              t.invoice_number.split('-').pop() ?? t.invoice_number;
 
-            <View className="flex-1">
-              <Text className="font-dm-semibold text-[13px] text-foreground">
-                #{t.id}
-              </Text>
-              <Text className="font-dm-regular text-xs text-muted-foreground">
-                {t.time} WIB, {t.items} item
-              </Text>
-            </View>
+            return (
+              <Pressable
+                key={t.id}
+                onPress={() => onSalePress(t.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Lihat detail transaksi ${t.invoice_number}`}
+                className={`flex-row items-center gap-3 px-4 py-3 active:bg-muted/40 ${
+                  i < sales.length - 1 ? 'border-b border-border/30' : ''
+                }`}
+              >
+                <View className="size-10 items-center justify-center rounded-full bg-accent/60">
+                  <Icon as={Receipt} size={16} className="text-primary" />
+                </View>
 
-            <Text className="font-dm-bold text-[13px] text-foreground">
-              {formatRupiah(t.total)}
+                <View className="flex-1">
+                  <Text className="font-dm-semibold text-[13px] text-foreground">
+                    #{shortId}
+                  </Text>
+                  <Text className="font-dm-regular text-xs text-muted-foreground">
+                    {formatTime(t.sale_date)} WIB, {t.items_count} item
+                  </Text>
+                </View>
+
+                <Text className="font-dm-bold text-[13px] text-foreground">
+                  {formatRupiah(t.total)}
+                </Text>
+                <Icon
+                  as={ChevronRight}
+                  size={15}
+                  className="text-muted-foreground/60"
+                />
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* Footer hint — kalau lebih dari 5 */}
+      {hasMore ? (
+        <View className="border-t border-border/40 bg-muted/30 px-4 py-2">
+          <Text className="text-center font-dm-regular text-[10.5px] text-muted-foreground">
+            Scroll untuk melihat {sales.length - RECENT_VISIBLE_ITEMS} lainnya
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+});
+
+function ProductImage({
+  uri,
+  emoji,
+  size = 48,
+}: {
+  uri: string | null;
+  emoji: string | null;
+  size?: number;
+}) {
+  const [failed, setFailed] = React.useState(false);
+
+  const showImage = uri && !failed;
+  return (
+    <View
+      style={{ width: size, height: size }}
+      className="items-center justify-center overflow-hidden rounded-xl border border-border/40 bg-accent/60"
+    >
+      {showImage ? (
+        <Image
+          source={{ uri }}
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <Text style={{ fontSize: size * 0.5 }}>
+          {emoji ?? '📦'}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   Product List Card
+   ══════════════════════════════════════════════════════ */
+const ProductListCard = React.memo(function ProductListCard({
+  products,
+}: {
+  products: ApiProduct[];
+}) {
+  const isEmpty = products.length === 0;
+  const preview = products.slice(0, PRODUCT_PREVIEW_LIMIT);
+  const remaining = products.length - preview.length;
+  return (
+    <View className="overflow-hidden rounded-2xl border border-border/40 bg-white">
+      {/* Header */}
+      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3">
+        <View className="flex-row items-center gap-2">
+          <Icon as={StoreIcon} size={15} className="text-primary" />
+          <Text className="font-dm-bold text-sm text-foreground">
+            Produk di toko Anda
+          </Text>
+        </View>
+        {!isEmpty ? (
+          <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5">
+            <Text className="font-dm-bold text-[11px] text-primary-foreground">
+              {products.length}
             </Text>
-            <Icon
-              as={ChevronRight}
-              size={15}
-              className="text-muted-foreground/60"
-            />
           </View>
-        ))
+        ) : null}
+      </View>
+
+      {/* Body */}
+      {isEmpty ? (
+        <View className="items-center gap-1 px-4 py-10">
+          <Text className="text-3xl">📦</Text>
+          <Text className="font-dm-semibold text-sm text-foreground">
+            Belum ada produk
+          </Text>
+          <Text className="text-center font-dm-regular text-xs text-muted-foreground">
+            Admin belum meng-assign produk ke toko Anda
+          </Text>
+        </View>
+      ) : (
+        <>
+          {preview.map((p, i) => {
+            const hasPromo =
+              p.discount_price != null && p.minimal_discount != null;
+            const displayPrice = hasPromo ? p.discount_price! : p.price;
+
+            return (
+              <View
+                key={p.id}
+                className={`flex-row items-center gap-3 px-4 py-2.5 ${
+                  i < preview.length - 1 || remaining > 0
+                    ? 'border-b border-border/30'
+                    : ''
+                }`}
+              >
+                {/* ⭐ Image — 48x48, dengan error fallback */}
+                <ProductImage uri={p.image_url} emoji={p.emoji} size={48} />
+
+                {/* Info */}
+                <View className="flex-1">
+                  <Text
+                    className="font-dm-semibold text-[12px] leading-tight text-foreground"
+                    numberOfLines={1}
+                  >
+                    {p.name}
+                  </Text>
+                  <View className="mt-0.5 flex-row items-center gap-1.5">
+                    <Text className="font-mono text-[10px] text-muted-foreground">
+                      {p.code}
+                    </Text>
+                    {hasPromo ? (
+                      <View className="rounded bg-destructive/10 px-1 py-px">
+                        <Text className="font-dm-bold text-[8px] text-destructive">
+                          PROMO
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* Price */}
+                <View className="items-end">
+                  {hasPromo ? (
+                    <Text className="font-dm-regular text-[9px] text-muted-foreground line-through">
+                      {formatRupiah(p.price, false)}
+                    </Text>
+                  ) : null}
+                  <Text className="font-dm-bold text-[12px] text-foreground">
+                    {formatRupiah(displayPrice, false)}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+
+          {/* Footer hint */}
+          {remaining > 0 ? (
+            <View className="bg-muted/30 px-4 py-2.5">
+              <Text className="text-center font-dm-regular text-[11px] text-muted-foreground">
+                dan {remaining} produk lainnya
+              </Text>
+            </View>
+          ) : null}
+        </>
       )}
     </View>
   );

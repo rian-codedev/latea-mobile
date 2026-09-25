@@ -13,9 +13,9 @@ export default function AppLayout() {
     );
   }
 
-  // if (!user) {
-  //   return <Redirect href="/(auth)/login" />;
-  // }
+  if (!user) {
+    return <Redirect href="/(auth)/login" />;
+  }
 
   return (
     <Stack screenOptions={{ headerShown: false }}>

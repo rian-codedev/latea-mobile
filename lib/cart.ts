@@ -4,7 +4,8 @@ export type CartItem = {
   productId: number;
   name: string;
   code: string;
-  emoji: string;
+  emoji: string;              // fallback kalau API tidak punya
+  imageUrl: string | null;    // dari API
   price: number;
   discountPrice: number | null;
   minimalDiscount: number | null;

@@ -27,13 +27,15 @@ import { router } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import {
-  User,
+  Mail,
   Lock,
   Eye,
   EyeOff,
   AlertCircle,
   type LucideIcon,
 } from 'lucide-react-native';
+import { useSession } from '@/lib/session';       // ⭐ BARU
+import { getErrorMessage } from '@/lib/api';      // ⭐ BARU
 import { formatRupiah } from '@/lib/format';
 
 /* ── Konfigurasi ── */
@@ -41,15 +43,9 @@ const APP_NAME = 'Latea App';
 const APP_TAGLINE = 'Annuqayah Latee';
 const LOGO = require('@/assets/images/icon.webp');
 
-const HOME_ROUTE = '/(app)' as any;
+const HOME_ROUTE = '/(app)';
 
-// TODO: ganti dengan pemanggilan API / auth store Anda
-async function signIn(username: string, password: string) {
-  await new Promise((r) => setTimeout(r, 900));
-  if (!username || !password) throw new Error('Data login tidak lengkap.');
-}
-
-/* ── Warna banner (soft) ── */
+/* ── Warna banner ── */
 const GRADIENT_A = ['#EEF5F0', '#DCEBE1', '#CBDFD3'] as const;
 const GRADIENT_B = ['#E9F1F4', '#D8E6EC', '#E4EEE7'] as const;
 
@@ -64,7 +60,7 @@ const CARD_SHADOW = {
 } as const;
 
 /* ══════════════════════════════════════════════════════
-   Hook animasi (menghormati "Kurangi gerakan")
+   Hook animasi
    ══════════════════════════════════════════════════════ */
 function useReduceMotion() {
   const [reduce, setReduce] = useState(false);
@@ -144,9 +140,13 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
 
+  // ⭐ Ambil signIn dari session context
+  const { signIn } = useSession();
+
   const isSplit = width >= 768;
 
-  const [username, setUsername] = useState('');
+  // ⭐ Ganti username → email
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -158,22 +158,21 @@ export default function LoginScreen() {
   async function handleSubmit() {
     if (loading) return;
 
-    if (!username.trim() || !password) {
-      setError('Isi username dan kata sandi terlebih dahulu.');
+    if (!email.trim() || !password) {
+      setError('Isi email dan kata sandi terlebih dahulu.');
       return;
     }
 
     setError(null);
     setLoading(true);
+
     try {
-      await signIn(username.trim(), password);
+      // ⭐ Panggil API via session context
+      await signIn(email.trim(), password);
+      // Redirect otomatis oleh (app)/_layout
       router.replace(HOME_ROUTE);
     } catch (e) {
-      setError(
-        e instanceof Error && e.message
-          ? e.message
-          : 'Username atau kata sandi salah. Periksa lagi lalu coba masuk.'
-      );
+      setError(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -196,7 +195,6 @@ export default function LoginScreen() {
           paddingBottom: insets.bottom + 24,
         }}
       >
-        {/* ═══ CARD: banner + form ═══ */}
         <Animated.View
           style={[
             CARD_SHADOW,
@@ -229,25 +227,29 @@ export default function LoginScreen() {
                 </View>
 
                 <View className="gap-4">
+                  {/* ⭐ Email */}
                   <Field
-                    label="Username"
-                    icon={User}
-                    value={username}
+                    label="Email"
+                    icon={Mail}
+                    value={email}
                     onChangeText={(t) => {
-                      setUsername(t);
+                      setEmail(t);
                       if (error) setError(null);
                     }}
-                    placeholder="Masukkan username"
+                    placeholder="kasir@latea.test"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    autoComplete="username"
-                    textContentType="username"
+                    autoComplete="email"
+                    keyboardType="email-address"
+                    textContentType="emailAddress"
                     returnKeyType="next"
                     onSubmitEditing={() => passwordRef.current?.focus()}
                     submitBehavior="submit"
                     hasError={!!error}
+                    editable={!loading}
                   />
 
+                  {/* Password */}
                   <Field
                     label="Kata sandi"
                     icon={Lock}
@@ -266,6 +268,7 @@ export default function LoginScreen() {
                     returnKeyType="go"
                     onSubmitEditing={handleSubmit}
                     hasError={!!error}
+                    editable={!loading}
                     right={
                       <Pressable
                         onPress={() => setShowPassword((v) => !v)}
@@ -333,7 +336,7 @@ export default function LoginScreen() {
 }
 
 /* ══════════════════════════════════════════════════════
-   Logo — ikon aplikasi + nama + tagline
+   Logo
    ══════════════════════════════════════════════════════ */
 function Logo() {
   return (
@@ -357,7 +360,7 @@ function Logo() {
 }
 
 /* ══════════════════════════════════════════════════════
-   Field — input dengan label, ikon, dan state fokus
+   Field
    ══════════════════════════════════════════════════════ */
 type FieldProps = TextInputProps & {
   label: string;
@@ -410,7 +413,7 @@ function Field({
 }
 
 /* ══════════════════════════════════════════════════════
-   Banner — panel kiri di dalam card
+   Banner
    ══════════════════════════════════════════════════════ */
 const MESSAGES = [
   {

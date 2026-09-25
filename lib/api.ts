@@ -6,7 +6,7 @@ import { tokenStorage } from './storage';
  *    Cari via: ipconfig (Windows) / ifconfig (Mac/Linux).
  */
 const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.1.100:8000/api/mobile';
+  process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.100.102:8000/api/mobile';
 
 export const api = axios.create({
   baseURL: BASE_URL,

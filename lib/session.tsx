@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 import { tokenStorage } from './storage';
 
@@ -28,29 +29,32 @@ const SessionContext = React.createContext<SessionState | null>(null);
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const queryClient = useQueryClient();
 
   // Restore session saat app pertama dibuka
   React.useEffect(() => {
-    let mounted = true;
+  let mounted = true;
 
-    (async () => {
+  (async () => {
+    const token = await tokenStorage.get();
+
+    if (token) {
       try {
-        const token = await tokenStorage.get();
-        if (token) {
-          const res = await api.get<User>('/me');
-          if (mounted) setUser(res.data);
-        }
-      } catch {
+        const res = await api.get<User>('/me');
+        if (mounted) setUser(res.data);
+      } catch (err: any) {
         await tokenStorage.clear();
-      } finally {
-        if (mounted) setIsLoading(false);
       }
-    })();
+    } else {
+    }
 
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    if (mounted) setIsLoading(false);
+  })();
+
+  return () => {
+    mounted = false;
+  };
+}, []);
 
   const signIn = React.useCallback(async (email: string, password: string) => {
     const res = await api.post<{ token: string; user: User }>('/login', {
@@ -58,6 +62,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       password,
     });
     await tokenStorage.set(res.data.token);
+    queryClient.clear();
     setUser(res.data.user);
   }, []);
 
@@ -68,6 +73,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // Abaikan — tetap bersihkan lokal
     } finally {
       await tokenStorage.clear();
+      queryClient.clear();
       setUser(null);
     }
   }, []);
