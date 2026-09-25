@@ -526,17 +526,13 @@ const StartCard = React.memo(function StartCard({
 }) {
   const pressStyle = useCallback(
     ({ pressed }: { pressed: boolean }) => ({
-      transform: [{ scale: pressed ? 0.985 : 1 }],
+      transform: [{ scale: pressed ? 0.97 : 1 }],
     }),
     []
   );
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Mulai transaksi"
-      style={pressStyle}
+    <View
       className={`overflow-hidden rounded-3xl border border-border/40 ${
         large ? 'p-8' : 'p-6'
       }`}
@@ -574,7 +570,14 @@ const StartCard = React.memo(function StartCard({
         </Text>
 
         <View className="mt-6 flex-row flex-wrap items-center gap-3">
-          <View className="h-12 flex-row items-center gap-2 rounded-full bg-primary px-5">
+          {/* ⭐ Hanya tombol ini yang Pressable */}
+          <Pressable
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel="Mulai transaksi"
+            style={pressStyle}
+            className="h-12 flex-row items-center gap-2 rounded-full bg-primary px-5 active:opacity-90"
+          >
             <Icon
               as={ShoppingCart}
               size={17}
@@ -583,7 +586,7 @@ const StartCard = React.memo(function StartCard({
             <Text className="font-dm-bold text-sm text-primary-foreground">
               Buka kasir
             </Text>
-          </View>
+          </Pressable>
 
           <View className="flex-row items-center gap-2">
             <Pill icon={Package} text={`${activeProducts} produk aktif`} />
@@ -593,7 +596,7 @@ const StartCard = React.memo(function StartCard({
           </View>
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 });
 

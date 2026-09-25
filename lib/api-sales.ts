@@ -48,14 +48,9 @@ export type CreateSaleInput = {
 
 export async function createSale(input: CreateSaleInput): Promise<Sale> {
   try {
-    console.log('📤 POST /sales payload:', JSON.stringify(input, null, 2));
     const res = await api.post<{ data: Sale }>('/sales', input);
-    console.log('✅ Sale response:', JSON.stringify(res.data.data, null, 2));
     return res.data.data;
   } catch (e: any) {
-    console.log('❌ Sale error status:', e?.response?.status);
-    console.log('❌ Sale error body:', JSON.stringify(e?.response?.data, null, 2));
-    console.log('❌ Sale error message:', e?.message);
     throw e;
   }
 }

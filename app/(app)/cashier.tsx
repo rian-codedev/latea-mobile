@@ -35,7 +35,6 @@ import {
 import { useProducts } from '@/lib/useProduct';
 import { createSale, type Sale } from '@/lib/api-sales';
 import { getErrorMessage } from '@/lib/api';
-import { ReceiptModal } from '@/lib/receipt-modal';
 import type { ApiProduct } from '@/lib/api-products';
 import {
   useCart,
@@ -72,7 +71,7 @@ export default function CashierScreen() {
   const [search, setSearch] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [receiptSale, setReceiptSale] = useState<Sale | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
   const { user } = useSession();
   const {
     data: apiProducts = [],
@@ -89,6 +88,11 @@ export default function CashierScreen() {
 
   const { total } = calcTotals(items);
   const itemCount = items.reduce((a, i) => a + i.quantity, 0);
+
+  const showSuccess = useCallback((message: string) => {
+    setSuccessToast(message);
+    setTimeout(() => setSuccessToast(null), 3000);   // ⭐ 0.5 detik
+  }, []);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -378,18 +382,40 @@ export default function CashierScreen() {
         bottomInset={insets.bottom}
         onSuccess={(sale) => {
           setCheckoutOpen(false);
-          setTimeout(() => setReceiptSale(sale), 250);
+          showSuccess(`Transaksi ${sale.invoice_number} berhasil`);
         }}
       />
 
-      {/* ══ RECEIPT MODAL ══ */}
-      <ReceiptModal
-        sale={receiptSale}
-        visible={!!receiptSale}
-        onClose={() => {
-          setReceiptSale(null);
-        }}
-      />
+      {/* ══ SUCCESS TOAST ══ */}
+      {successToast ? (
+        <View
+          className="absolute right-5 z-50"
+          style={{
+            top: insets.top + HEADER_HEIGHT + 30,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.08,
+            shadowRadius: 12,
+            elevation: 4,
+          }}
+          pointerEvents="none"
+        >
+          <View className="flex-row items-center gap-2.5 rounded-2xl border border-border/40 bg-white px-3 py-2">
+            {/* Icon check kecil dengan background halus */}
+            <View className="size-6 items-center justify-center rounded-full bg-primary/10">
+              <Icon as={Check} size={12} className="text-primary" />
+            </View>
+
+            {/* Text singkat */}
+            <Text
+              className="font-dm-medium text-[11px] text-foreground"
+              numberOfLines={1}
+            >
+              {successToast}
+            </Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -417,9 +443,8 @@ function ProductButton({
         height: CARD_HEIGHT,
         transform: [{ scale: pressed ? 0.97 : 1 }],
       })}
-      className={`flex-1 overflow-hidden rounded-2xl border-[1.5px] bg-white ${
-        inCart ? 'border-primary' : 'border-border/40'
-      }`}
+      className={`flex-1 overflow-hidden rounded-2xl border-[1.5px] bg-white ${inCart ? 'border-primary' : 'border-border/40'
+        }`}
     >
       <View
         style={{ height: IMAGE_HEIGHT }}
@@ -991,18 +1016,16 @@ function CheckoutModal({
                           if (error) setError(null);
                         }}
                         disabled={isSubmitting}
-                        className={`h-9 flex-row items-center gap-1 rounded-full border px-3.5 active:opacity-80 ${
-                          active
+                        className={`h-9 flex-row items-center gap-1 rounded-full border px-3.5 active:opacity-80 ${active
                             ? 'border-primary bg-primary'
                             : 'border-border/60 bg-white'
-                        }`}
+                          }`}
                       >
                         <Text
-                          className={`font-dm-bold text-xs ${
-                            active
+                          className={`font-dm-bold text-xs ${active
                               ? 'text-primary-foreground'
                               : 'text-foreground'
-                          }`}
+                            }`}
                         >
                           {isExact ? 'Pas' : formatRupiah(amount)}
                         </Text>
@@ -1014,24 +1037,21 @@ function CheckoutModal({
 
               {/* Kembalian */}
               <View
-                className={`overflow-hidden rounded-2xl border ${
-                  change >= 0
+                className={`overflow-hidden rounded-2xl border ${change >= 0
                     ? 'border-primary/30 bg-primary/5'
                     : 'border-destructive/30 bg-destructive/5'
-                }`}
+                  }`}
               >
                 <View className="flex-row items-center justify-between px-4 py-3.5">
                   <Text
-                    className={`font-dm-semibold text-sm ${
-                      change >= 0 ? 'text-foreground' : 'text-destructive'
-                    }`}
+                    className={`font-dm-semibold text-sm ${change >= 0 ? 'text-foreground' : 'text-destructive'
+                      }`}
                   >
                     {change >= 0 ? 'Kembalian' : 'Kurang'}
                   </Text>
                   <Text
-                    className={`font-dm-extrabold text-xl leading-none tracking-tight ${
-                      change >= 0 ? 'text-primary' : 'text-destructive'
-                    }`}
+                    className={`font-dm-extrabold text-xl leading-none tracking-tight ${change >= 0 ? 'text-primary' : 'text-destructive'
+                      }`}
                   >
                     {formatRupiah(Math.abs(change))}
                   </Text>
