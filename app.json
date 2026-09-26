@@ -4,7 +4,7 @@
     "slug": "latea-pos-mobile",
     "version": "2.2.1",
     "orientation": "default",
-    "icon": "./assets/images/icon.webp",
+    "icon": "./assets/images/icon.png",
     "scheme": "latea-pos-mobile",
     "userInterfaceStyle": "automatic",
     "assetBundlePatterns": [
@@ -30,7 +30,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash.webp",
+          "image": "./assets/images/splash.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#F9E4BC"

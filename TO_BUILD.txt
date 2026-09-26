@@ -1,0 +1,36 @@
+npm install -g eas-cli
+eas login
+eas project:init
+eas build:configure
+
+{
+  "cli": {
+    "version": ">= 10.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {}
+  }
+}
+
+eas build --platform android --profile preview
+
+OR
+
+npx expo prebuild --clean
+cd android
+./gradlew clean
+
+Choose one of these:
+./gradlew assembleDebug		Development/Debug APK (untuk testing cepat)
+./gradlew assembleRelease	Release APK (untuk distribusi):
+./gradlew bundleRelease		Android App Bundle (.aab) untuk Play Store

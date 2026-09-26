@@ -7,7 +7,9 @@
     "android": "expo start -c --android",
     "ios": "expo start -c --ios",
     "web": "expo start -c --web",
-    "clean": "rm -rf .expo node_modules"
+    "clean": "rm -rf .expo node_modules",
+    "build:preview": "eas build --platform android --profile preview && eas build:download --platform android --profile preview",
+    "build:production": "eas build --platform android --profile production && eas build:download --platform android --profile production --output=\"PSHT App-Production.apk\""
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",

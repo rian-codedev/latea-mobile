@@ -41,7 +41,7 @@ import { formatRupiah } from '@/lib/format';
 /* ── Konfigurasi ── */
 const APP_NAME = 'Latea App';
 const APP_TAGLINE = 'Annuqayah Latee';
-const LOGO = require('@/assets/images/icon.webp');
+const LOGO = require('@/assets/images/icon.png');
 
 const HOME_ROUTE = '/(app)';
 

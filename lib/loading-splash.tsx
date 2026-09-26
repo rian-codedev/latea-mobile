@@ -2,7 +2,7 @@ import { View, ActivityIndicator, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/ui/text';
 
-const LOGO = require('@/assets/images/icon.webp');
+const LOGO = require('@/assets/images/icon.png');
 
 export function LoadingSplash() {
   return (
