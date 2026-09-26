@@ -46,40 +46,41 @@ export function ReceiptModal({
           tint="dark"
           style={StyleSheet.absoluteFill}
         />
-        {/* Overlay gelap tipis untuk kontras */}
         <View
           style={StyleSheet.absoluteFill}
-          className="bg-black/20"
+          className="bg-black/20 dark:bg-black/40"
           pointerEvents="none"
         />
 
-        {/* Tap backdrop untuk close */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-        {/* ══ CARD dengan SHADOW ══ */}
+        {/* ══ CARD ══ */}
         <View
           style={{
             width: '90%',
             maxWidth: 400,
             maxHeight: '88%',
-            // ⭐ SHADOW
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 24 },
             shadowOpacity: 0.35,
             shadowRadius: 40,
-            elevation: 24,   // Android
+            elevation: 24,
           }}
-          className="overflow-hidden rounded-3xl bg-white"
+          className="overflow-hidden rounded-3xl bg-white dark:bg-stone-900"
         >
           {/* Success header */}
-          <View className="items-center gap-1.5 border-b border-border/40 px-5 py-5">
-            <View className="size-12 items-center justify-center rounded-full bg-primary/10">
-              <Icon as={CheckCircle} size={24} className="text-primary" />
+          <View className="items-center gap-1.5 border-b border-border/40 px-5 py-5 dark:border-stone-800/60">
+            <View className="size-12 items-center justify-center rounded-full bg-primary/10 dark:bg-sage-500/15">
+              <Icon
+                as={CheckCircle}
+                size={24}
+                className="text-primary dark:text-sage-400"
+              />
             </View>
-            <Text className="font-dm-bold text-base text-foreground">
+            <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
               Detail Transaksi
             </Text>
-            <Text className="font-mono text-[10px] text-muted-foreground">
+            <Text className="font-mono text-[10px] text-muted-foreground dark:text-stone-400">
               {sale.invoice_number}
             </Text>
           </View>
@@ -90,10 +91,10 @@ export function ReceiptModal({
             contentContainerStyle={{ padding: 20 }}
           >
             <View className="items-center gap-0.5">
-              <Text className="font-dm-extrabold text-base text-foreground">
+              <Text className="font-dm-extrabold text-base text-foreground dark:text-stone-50">
                 {sale.store?.name ?? 'Toko'}
               </Text>
-              <Text className="font-dm-regular text-[10px] text-muted-foreground">
+              <Text className="font-dm-regular text-[10px] text-muted-foreground dark:text-stone-400">
                 {sale.store?.location}
               </Text>
             </View>
@@ -110,14 +111,14 @@ export function ReceiptModal({
             <View className="gap-2.5 py-3">
               {sale.items.map((item, i) => (
                 <View key={i} className="gap-0.5">
-                  <Text className="font-dm-semibold text-[12px] text-foreground">
+                  <Text className="font-dm-semibold text-[12px] text-foreground dark:text-stone-50">
                     {item.product_name}
                   </Text>
                   <View className="flex-row justify-between">
-                    <Text className="font-dm-regular text-[11px] text-muted-foreground">
+                    <Text className="font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
                       {item.quantity} × {formatRupiah(item.effective_price)}
                     </Text>
-                    <Text className="font-dm-bold text-[12px] text-foreground">
+                    <Text className="font-dm-bold text-[12px] text-foreground dark:text-stone-50">
                       {formatRupiah(item.line_total)}
                     </Text>
                   </View>
@@ -136,7 +137,7 @@ export function ReceiptModal({
                   destructive
                 />
               ) : null}
-              <View className="my-1 h-px bg-border/60" />
+              <View className="my-1 h-px bg-border/60 dark:bg-stone-700/60" />
               <Row
                 label="TOTAL"
                 value={formatRupiah(sale.total)}
@@ -152,10 +153,10 @@ export function ReceiptModal({
             </View>
           </ScrollView>
 
-          <View className="border-t border-border/40 p-4">
+          <View className="border-t border-border/40 p-4 dark:border-stone-800/60">
             <Pressable
               onPress={onClose}
-              className="h-11 items-center justify-center rounded-full bg-primary active:opacity-90"
+              className="h-11 items-center justify-center rounded-full bg-primary active:opacity-90 dark:bg-sage-500"
             >
               <Text className="font-dm-bold text-sm text-primary-foreground">
                 Tutup
@@ -184,16 +185,16 @@ function Row({
 }) {
   return (
     <View className="flex-row justify-between">
-      <Text className="font-dm-regular text-[11px] text-muted-foreground">
+      <Text className="font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
         {label}
       </Text>
       <Text
         className={`${bold ? 'font-dm-extrabold text-base' : 'font-dm-semibold text-[11px]'} ${
           primary
-            ? 'text-primary'
+            ? 'text-primary dark:text-sage-400'
             : destructive
-              ? 'text-destructive'
-              : 'text-foreground'
+              ? 'text-destructive dark:text-red-400'
+              : 'text-foreground dark:text-stone-50'
         }`}
       >
         {value}
@@ -206,7 +207,10 @@ function DashedLine() {
   return (
     <View className="flex-row justify-between">
       {Array.from({ length: 40 }).map((_, i) => (
-        <View key={i} className="h-px w-[4px] bg-border" />
+        <View
+          key={i}
+          className="h-px w-[4px] bg-border dark:bg-stone-700"
+        />
       ))}
     </View>
   );

@@ -37,6 +37,9 @@ const queryClient = new QueryClient({
 });
 
 function RootNavigator() {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
   const [fontsLoaded] = useFonts({
     DMSans_400Regular,
     DMSans_500Medium,
@@ -45,46 +48,47 @@ function RootNavigator() {
     DMSans_800ExtraBold,
   });
 
-  const { isFirstLaunch, markLaunched } = useFirstLaunch();
+  const { isFirstLaunch } = useFirstLaunch();
   const [appReady, setAppReady] = useState(false);
 
-  // ⭐ Hide native splash setelah fonts loaded & first launch check selesai
   useEffect(() => {
     if (fontsLoaded && isFirstLaunch !== null) {
       SplashScreen.hideAsync();
-      // Kasih jeda sedikit agar transisi smooth
-      setTimeout(() => setAppReady(true), 100);
+      setTimeout(() => setAppReady(true), 300);
     }
   }, [fontsLoaded, isFirstLaunch]);
 
-  // Redirect ke onboarding kalau first install
   useEffect(() => {
     if (appReady && isFirstLaunch === true) {
       router.replace('/(onboarding)' as any);
     }
   }, [appReady, isFirstLaunch]);
 
-  // Loading state (selagi fonts & first launch check)
   if (!fontsLoaded || isFirstLaunch === null) {
     return <LoadingSplash />;
   }
 
   return (
-    <ThemeProvider value={NAV_THEME.light}>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(onboarding)" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(app)" />
-      </Stack>
-      <PortalHost />
-    </ThemeProvider>
+    <>
+      {/* ⭐ StatusBar DI LUAR ThemeProvider & Stack */}
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+
+      <ThemeProvider value={isDark ? NAV_THEME.dark : NAV_THEME.light}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(onboarding)" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(app)" />
+        </Stack>
+        <PortalHost />
+      </ThemeProvider>
+    </>
   );
 }
 
 export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
+      {/* ❌ HAPUS StatusBar di sini — biar tidak konflik */}
       <SessionProvider>
         <RootNavigator />
       </SessionProvider>

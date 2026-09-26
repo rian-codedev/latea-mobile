@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { useColorScheme } from 'nativewind';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import { ArrowRight, ArrowLeft } from 'lucide-react-native';
@@ -41,11 +42,18 @@ const SLIDES = [
   },
 ] as const;
 
-// Gradasi lembut untuk latar, satu per slide
+// Gradasi lembut untuk latar (light mode)
 const GRADIENTS = [
   ['#FBF3E3', '#FDFBF5', '#EFF5EF'],
   ['#EFF3EC', '#FAFAF6', '#EAF1F4'],
   ['#EDF2F4', '#FBFAF6', '#F1F0E9'],
+] as const;
+
+// ⭐ Gradasi gelap untuk dark mode
+const GRADIENTS_DARK = [
+  ['#1A1612', '#0F0E0B', '#0D1410'],
+  ['#111510', '#0A0B08', '#0C1216'],
+  ['#0F1416', '#0B0A08', '#14120D'],
 ] as const;
 
 const CARD_SHADOW = {
@@ -53,6 +61,16 @@ const CARD_SHADOW = {
   borderRadius: 28,
   shadowColor: '#0F172A',
   shadowOpacity: 0.1,
+  shadowRadius: 28,
+  shadowOffset: { width: 0, height: 14 },
+  elevation: 12,
+} as const;
+
+const CARD_SHADOW_DARK = {
+  backgroundColor: '#1C1917',
+  borderRadius: 28,
+  shadowColor: '#000000',
+  shadowOpacity: 0.5,
   shadowRadius: 28,
   shadowOffset: { width: 0, height: 14 },
   elevation: 12,
@@ -116,6 +134,10 @@ export default function OnboardingScreen() {
   const { markLaunched } = useFirstLaunch();
   const reduceMotion = useReduceMotion();
 
+  // ⭐ Theme awareness
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
   const isTablet = width >= 768;
 
   const [idx, setIdx] = useState(0);
@@ -129,6 +151,10 @@ export default function OnboardingScreen() {
 
   // Card masuk sekali saat layar dibuka
   const cardEntrance = useEntrance(reduceMotion, 24);
+
+  // ⭐ Ambil gradient & shadow sesuai tema
+  const gradients = isDark ? GRADIENTS_DARK : GRADIENTS;
+  const cardShadow = isDark ? CARD_SHADOW_DARK : CARD_SHADOW;
 
   function goTo(next: number) {
     if (next === idx || next < 0 || next > SLIDES.length - 1) return;
@@ -192,11 +218,11 @@ export default function OnboardingScreen() {
   const illustrationSize = isTablet ? 280 : 200;
 
   return (
-    <View className="flex-1">
+    <View className="flex-1 bg-white dark:bg-stone-950">
       {/* ── Latar gradasi, berganti halus per slide ── */}
       <View className="absolute inset-0">
         <LinearGradient
-          colors={GRADIENTS[renderIdx]}
+          colors={[...gradients[renderIdx]]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0.6, y: 1 }}
           style={{ flex: 1 }}
@@ -208,7 +234,7 @@ export default function OnboardingScreen() {
         pointerEvents="none"
       >
         <LinearGradient
-          colors={GRADIENTS[idx]}
+          colors={[...gradients[idx]]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0.6, y: 1 }}
           style={{ flex: 1 }}
@@ -228,7 +254,7 @@ export default function OnboardingScreen() {
           style={{ top: insets.top + 16 }}
         >
           <Pressable onPress={finish} hitSlop={10}>
-            <Text className="font-dm-medium text-xs text-muted-foreground">
+            <Text className="font-dm-medium text-xs text-muted-foreground dark:text-stone-400">
               Lewati
             </Text>
           </Pressable>
@@ -237,11 +263,11 @@ export default function OnboardingScreen() {
         {/* ── Card ── */}
         <Animated.View
           style={[
-            CARD_SHADOW,
+            cardShadow,
             { width: '100%', maxWidth: isTablet ? 560 : 420 },
             cardEntrance,
           ]}
-          className="border border-border/40"
+          className="border border-border/40 dark:border-stone-800/60"
         >
           <View
             className={isTablet ? 'gap-8 px-12 py-12' : 'gap-6 px-6 py-8'}
@@ -269,14 +295,14 @@ export default function OnboardingScreen() {
               {/* Title + Body */}
               <View className="items-center gap-2.5">
                 <Text
-                  className={`text-center font-dm-extrabold tracking-tight text-foreground ${
+                  className={`text-center font-dm-extrabold tracking-tight text-foreground dark:text-stone-50 ${
                     isTablet ? 'text-3xl' : 'text-2xl'
                   }`}
                 >
                   {shownSlide.title}
                 </Text>
                 <Text
-                  className={`text-center font-dm-regular leading-6 text-muted-foreground ${
+                  className={`text-center font-dm-regular leading-6 text-muted-foreground dark:text-stone-400 ${
                     isTablet
                       ? 'max-w-[380px] text-base'
                       : 'max-w-[280px] text-sm'
@@ -299,7 +325,9 @@ export default function OnboardingScreen() {
                 >
                   <View
                     className={`h-1.5 rounded-full ${
-                      i === idx ? 'w-5 bg-primary' : 'w-1.5 bg-foreground/15'
+                      i === idx
+                        ? 'w-5 bg-primary dark:bg-sage-400'
+                        : 'w-1.5 bg-foreground/15 dark:bg-stone-100/15'
                     }`}
                   />
                 </Pressable>
@@ -322,9 +350,9 @@ export default function OnboardingScreen() {
                   <Icon
                     as={ArrowLeft}
                     size={13}
-                    className="text-muted-foreground"
+                    className="text-muted-foreground dark:text-stone-400"
                   />
-                  <Text className="font-dm-medium text-xs text-muted-foreground">
+                  <Text className="font-dm-medium text-xs text-muted-foreground dark:text-stone-400">
                     Kembali
                   </Text>
                 </Pressable>
@@ -338,7 +366,7 @@ export default function OnboardingScreen() {
 }
 
 /* ══════════════════════════════════════════════════════
-   Next Button — pill di tengah, warna lembut + animasi tekan
+   Next Button — pill di tengah
    ══════════════════════════════════════════════════════ */
 function NextButton({
   label,
@@ -372,7 +400,7 @@ function NextButton({
         onPressIn={pressIn}
         onPressOut={pressOut}
         accessibilityRole="button"
-        className="flex-row items-center justify-center gap-2 rounded-full bg-primary/90 px-8"
+        className="flex-row items-center justify-center gap-2 rounded-full bg-primary/90 px-8 dark:bg-sage-500/90"
         style={{
           height: 52,
           shadowColor: '#0F172A',

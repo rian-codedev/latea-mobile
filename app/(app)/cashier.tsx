@@ -44,6 +44,7 @@ import {
 } from '@/lib/cart';
 import { formatRupiah } from '@/lib/format';
 import { useSession } from '@/lib/session';
+import { useColorScheme } from 'nativewind';
 
 /* ── Konstanta ── */
 const HEADER_HEIGHT = 60;
@@ -53,6 +54,9 @@ const CART_BAR_HEIGHT = 64;
 
 const SOFT_GRADIENT_A = ['#EEF5F0', '#DCEBE1', '#CBDFD3'] as const;
 const SOFT_GRADIENT_B = ['#E9F1F4', '#D8E6EC', '#E4EEE7'] as const;
+
+const SOFT_GRADIENT_A_DARK = ['#1C2A22', '#182A20', '#15251D'] as const;
+const SOFT_GRADIENT_B_DARK = ['#152225', '#182A2A', '#1A2D24'] as const;
 
 /* ── Types ── */
 type GridItem = ApiProduct | { id: string; spacer: true };
@@ -67,7 +71,8 @@ function isSpacer(item: GridItem): item is { id: string; spacer: true } {
 export default function CashierScreen() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const [search, setSearch] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -91,7 +96,7 @@ export default function CashierScreen() {
 
   const showSuccess = useCallback((message: string) => {
     setSuccessToast(message);
-    setTimeout(() => setSuccessToast(null), 3000);   // ⭐ 0.5 detik
+    setTimeout(() => setSuccessToast(null), 3000);
   }, []);
 
   const handleBack = useCallback(() => {
@@ -144,7 +149,7 @@ export default function CashierScreen() {
   }
 
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-white dark:bg-stone-950">
       {/* ══ AREA KONTEN ══ */}
       <View
         className="flex-1 flex-row"
@@ -152,18 +157,26 @@ export default function CashierScreen() {
       >
         {/* ═══ KIRI: Katalog ═══ */}
         <View
-          className={isTablet ? 'flex-[7] border-r border-border/40' : 'flex-1'}
+          className={
+            isTablet
+              ? 'flex-[7] border-r border-border/40 dark:border-stone-800/60'
+              : 'flex-1'
+          }
         >
           {/* Search */}
-          <View className="bg-white px-3 pb-2 pt-3">
-            <View className="h-11 flex-row items-center gap-2 rounded-full border border-border/50 bg-muted/40 px-4">
-              <Icon as={Search} size={16} className="text-muted-foreground" />
+          <View className="bg-white px-3 pb-2 pt-3 dark:bg-stone-950">
+            <View className="h-11 flex-row items-center gap-2 rounded-full border border-border/50 bg-muted/40 px-4 dark:border-stone-700/60 dark:bg-stone-800/40">
+              <Icon
+                as={Search}
+                size={16}
+                className="text-muted-foreground dark:text-stone-400"
+              />
               <TextInput
                 value={search}
                 onChangeText={setSearch}
                 placeholder="Cari nama atau kode produk"
                 placeholderTextColor="#9CA3AF"
-                className="flex-1 py-0 font-dm-regular text-sm text-foreground"
+                className="flex-1 py-0 font-dm-regular text-sm text-foreground dark:text-stone-50"
                 autoCorrect={false}
                 autoCapitalize="none"
                 returnKeyType="search"
@@ -174,7 +187,11 @@ export default function CashierScreen() {
                   hitSlop={10}
                   accessibilityLabel="Hapus pencarian"
                 >
-                  <Icon as={X} size={16} className="text-muted-foreground" />
+                  <Icon
+                    as={X}
+                    size={16}
+                    className="text-muted-foreground dark:text-stone-400"
+                  />
                 </Pressable>
               ) : null}
             </View>
@@ -198,7 +215,9 @@ export default function CashierScreen() {
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => {
               if (isSpacer(item)) {
-                return <View className="flex-1" style={{ height: CARD_HEIGHT }} />;
+                return (
+                  <View className="flex-1" style={{ height: CARD_HEIGHT }} />
+                );
               }
               return (
                 <ProductButton
@@ -212,19 +231,19 @@ export default function CashierScreen() {
               isLoading ? (
                 <View className="items-center justify-center gap-2 py-16">
                   <ActivityIndicator size="large" />
-                  <Text className="font-dm-regular text-xs text-muted-foreground">
+                  <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
                     Memuat produk...
                   </Text>
                 </View>
               ) : error ? (
                 <View className="items-center justify-center gap-2 py-16">
                   <Text className="text-3xl">⚠️</Text>
-                  <Text className="font-dm-semibold text-sm text-foreground">
+                  <Text className="font-dm-semibold text-sm text-foreground dark:text-stone-50">
                     Gagal memuat produk
                   </Text>
                   <Pressable
                     onPress={() => refetch()}
-                    className="mt-1 rounded-full bg-primary px-4 py-2"
+                    className="mt-1 rounded-full bg-primary px-4 py-2 dark:bg-sage-500"
                   >
                     <Text className="font-dm-bold text-xs text-primary-foreground">
                       Coba Lagi
@@ -234,10 +253,10 @@ export default function CashierScreen() {
               ) : (
                 <View className="items-center justify-center gap-1 py-16">
                   <Text className="text-3xl">🔍</Text>
-                  <Text className="font-dm-semibold text-sm text-foreground">
+                  <Text className="font-dm-semibold text-sm text-foreground dark:text-stone-50">
                     Produk tidak ditemukan
                   </Text>
-                  <Text className="font-dm-regular text-xs text-muted-foreground">
+                  <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
                     Coba kata kunci atau kode produk lain
                   </Text>
                 </View>
@@ -248,7 +267,7 @@ export default function CashierScreen() {
 
         {/* ═══ KANAN: Keranjang (tablet) ═══ */}
         {isTablet ? (
-          <View className="flex-[3] bg-white">
+          <View className="flex-[3] bg-white dark:bg-stone-950">
             <CartPanel bottomInset={insets.bottom} onCheckout={openCheckout} />
           </View>
         ) : null}
@@ -257,7 +276,7 @@ export default function CashierScreen() {
       {/* ══ GLASS HEADER ══ */}
       <BlurView
         intensity={70}
-        tint="light"
+        tint={isDark ? 'dark' : 'light'}
         style={{
           position: 'absolute',
           top: 0,
@@ -267,7 +286,7 @@ export default function CashierScreen() {
         }}
         className="overflow-hidden"
       >
-        <View className="absolute bottom-0 left-0 right-0 h-px bg-border/40" />
+        <View className="absolute bottom-0 left-0 right-0 h-px bg-border/40 dark:bg-stone-800/60" />
 
         <View
           style={{ height: HEADER_HEIGHT }}
@@ -277,16 +296,20 @@ export default function CashierScreen() {
             onPress={handleBack}
             hitSlop={8}
             accessibilityLabel="Kembali"
-            className="size-10 items-center justify-center rounded-full active:bg-muted/60"
+            className="size-10 items-center justify-center rounded-full active:bg-muted/60 dark:active:bg-stone-800/60"
           >
-            <Icon as={ArrowLeft} size={20} className="text-foreground" />
+            <Icon
+              as={ArrowLeft}
+              size={20}
+              className="text-foreground dark:text-stone-50"
+            />
           </Pressable>
 
           <View className="flex-1">
-            <Text className="font-dm-bold text-base text-foreground">
+            <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
               Kasir
             </Text>
-            <Text className="font-dm-regular text-xs text-muted-foreground">
+            <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
               Tap produk untuk menambah ke keranjang
             </Text>
           </View>
@@ -303,16 +326,16 @@ export default function CashierScreen() {
           <Pressable
             onPress={() => setCartOpen(true)}
             style={{ height: CART_BAR_HEIGHT }}
-            className="overflow-hidden rounded-full border border-border/40 active:opacity-90"
+            className="overflow-hidden rounded-full border border-border/40 active:opacity-90 dark:border-stone-800/60"
           >
             <LinearGradient
-              colors={SOFT_GRADIENT_A}
+              colors={[...(isDark ? SOFT_GRADIENT_A_DARK : SOFT_GRADIENT_A)]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={StyleSheet.absoluteFill}
             />
             <LinearGradient
-              colors={SOFT_GRADIENT_B}
+              colors={[...(isDark ? SOFT_GRADIENT_B_DARK : SOFT_GRADIENT_B)]}
               start={{ x: 1, y: 0 }}
               end={{ x: 0, y: 0 }}
               style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
@@ -320,7 +343,7 @@ export default function CashierScreen() {
 
             <View className="h-full flex-row items-center justify-between px-2">
               <View className="flex-row items-center gap-3">
-                <View className="size-10 items-center justify-center rounded-full bg-primary">
+                <View className="size-10 items-center justify-center rounded-full bg-primary dark:bg-sage-500">
                   <Icon
                     as={ShoppingCart}
                     size={18}
@@ -328,20 +351,24 @@ export default function CashierScreen() {
                   />
                 </View>
                 <View>
-                  <Text className="font-dm-regular text-[11px] text-muted-foreground">
+                  <Text className="font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
                     {itemCount} item
                   </Text>
-                  <Text className="font-dm-extrabold text-base leading-tight tracking-tight text-foreground">
+                  <Text className="font-dm-extrabold text-base leading-tight tracking-tight text-foreground dark:text-stone-50">
                     {formatRupiah(total)}
                   </Text>
                 </View>
               </View>
 
               <View className="flex-row items-center gap-1 pr-3">
-                <Text className="font-dm-bold text-sm text-primary">
+                <Text className="font-dm-bold text-sm text-primary dark:text-sage-400">
                   Lihat keranjang
                 </Text>
-                <Icon as={ChevronUp} size={18} className="text-primary" />
+                <Icon
+                  as={ChevronUp}
+                  size={18}
+                  className="text-primary dark:text-sage-400"
+                />
               </View>
             </View>
           </Pressable>
@@ -359,11 +386,11 @@ export default function CashierScreen() {
           <View className="flex-1 justify-end bg-black/40">
             <Pressable className="flex-1" onPress={() => setCartOpen(false)} />
             <View
-              className="overflow-hidden rounded-t-3xl bg-white"
+              className="overflow-hidden rounded-t-3xl bg-white dark:bg-stone-950"
               style={{ height: '78%' }}
             >
               <View className="items-center pt-2">
-                <View className="h-1 w-10 rounded-full bg-border" />
+                <View className="h-1 w-10 rounded-full bg-border dark:bg-stone-700" />
               </View>
               <CartPanel
                 bottomInset={insets.bottom}
@@ -400,15 +427,17 @@ export default function CashierScreen() {
           }}
           pointerEvents="none"
         >
-          <View className="flex-row items-center gap-2.5 rounded-2xl border border-border/40 bg-white px-3 py-2">
-            {/* Icon check kecil dengan background halus */}
-            <View className="size-6 items-center justify-center rounded-full bg-primary/10">
-              <Icon as={Check} size={12} className="text-primary" />
+          <View className="flex-row items-center gap-2.5 rounded-2xl border border-border/40 bg-white px-3 py-2 dark:border-stone-800/60 dark:bg-stone-900">
+            <View className="size-6 items-center justify-center rounded-full bg-primary/10 dark:bg-sage-500/15">
+              <Icon
+                as={Check}
+                size={12}
+                className="text-primary dark:text-sage-400"
+              />
             </View>
 
-            {/* Text singkat */}
             <Text
-              className="font-dm-medium text-[11px] text-foreground"
+              className="font-dm-medium text-[11px] text-foreground dark:text-stone-50"
               numberOfLines={1}
             >
               {successToast}
@@ -443,14 +472,16 @@ function ProductButton({
         height: CARD_HEIGHT,
         transform: [{ scale: pressed ? 0.97 : 1 }],
       })}
-      className={`flex-1 overflow-hidden rounded-2xl border-[1.5px] bg-white ${inCart ? 'border-primary' : 'border-border/40'
+      className={`flex-1 overflow-hidden rounded-2xl border-[1.5px] bg-white dark:bg-stone-900 ${inCart
+        ? 'border-primary dark:border-sage-500'
+        : 'border-border/40 dark:border-stone-800/60'
         }`}
     >
       <View
         style={{ height: IMAGE_HEIGHT }}
         className="items-center justify-center overflow-hidden"
       >
-        <View className="absolute inset-0 bg-accent/60" />
+        <View className="absolute inset-0 bg-accent/60 dark:bg-stone-800" />
 
         {product.image_url ? (
           <Image
@@ -464,14 +495,14 @@ function ProductButton({
           </Text>
         )}
 
-        <View className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-0.5">
-          <Text className="font-dm-bold text-[10px] tracking-wide text-foreground">
+        <View className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-0.5 dark:bg-stone-900/95">
+          <Text className="font-dm-bold text-[10px] tracking-wide text-foreground dark:text-stone-50">
             {product.code}
           </Text>
         </View>
 
         {inCart ? (
-          <View className="absolute right-2 top-2 h-6 min-w-[24px] items-center justify-center rounded-full bg-primary px-1.5">
+          <View className="absolute right-2 top-2 h-6 min-w-[24px] items-center justify-center rounded-full bg-primary px-1.5 dark:bg-sage-500">
             <Text className="font-dm-bold text-[11px] text-primary-foreground">
               {qty}
             </Text>
@@ -481,7 +512,7 @@ function ProductButton({
 
       <View className="flex-1 justify-between p-2.5">
         <Text
-          className="font-dm-bold text-[13px] leading-tight text-foreground"
+          className="font-dm-bold text-[13px] leading-tight text-foreground dark:text-stone-50"
           numberOfLines={1}
         >
           {product.name}
@@ -489,17 +520,17 @@ function ProductButton({
 
         <View className="gap-1">
           <View className="flex-row items-baseline">
-            <Text className="mr-0.5 font-dm-medium text-[10px] text-muted-foreground">
+            <Text className="mr-0.5 font-dm-medium text-[10px] text-muted-foreground dark:text-stone-400">
               Rp
             </Text>
-            <Text className="font-dm-extrabold text-base leading-none tracking-tight text-foreground">
+            <Text className="font-dm-extrabold text-base leading-none tracking-tight text-foreground dark:text-stone-50">
               {Number(product.price).toLocaleString('id-ID')}
             </Text>
           </View>
 
           {hasPromo ? (
-            <View className="self-start rounded-md bg-destructive/10 px-1.5 py-0.5">
-              <Text className="font-dm-semibold text-[10px] text-destructive">
+            <View className="self-start rounded-md bg-destructive/10 px-1.5 py-0.5 dark:bg-red-500/15">
+              <Text className="font-dm-semibold text-[10px] text-destructive dark:text-red-400">
                 ≥{product.minimal_discount} pcs:{' '}
                 {formatRupiah(product.discount_price!)}
               </Text>
@@ -535,14 +566,18 @@ function CartPanel({
 
   return (
     <View className="flex-1">
-      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3">
+      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3 dark:border-stone-800/60">
         <View className="flex-row items-center gap-2">
-          <Icon as={ShoppingCart} size={17} className="text-primary" />
-          <Text className="font-dm-bold text-sm text-foreground">
+          <Icon
+            as={ShoppingCart}
+            size={17}
+            className="text-primary dark:text-sage-400"
+          />
+          <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
             Keranjang
           </Text>
           {itemCount > 0 ? (
-            <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5">
+            <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 dark:bg-sage-500">
               <Text className="font-dm-bold text-[11px] text-primary-foreground">
                 {itemCount}
               </Text>
@@ -553,7 +588,7 @@ function CartPanel({
         <View className="flex-row items-center gap-3">
           {!isEmpty ? (
             <Pressable onPress={clear} hitSlop={8}>
-              <Text className="font-dm-semibold text-xs text-destructive">
+              <Text className="font-dm-semibold text-xs text-destructive dark:text-red-400">
                 Kosongkan
               </Text>
             </Pressable>
@@ -563,9 +598,13 @@ function CartPanel({
               onPress={onClose}
               hitSlop={8}
               accessibilityLabel="Tutup keranjang"
-              className="size-8 items-center justify-center rounded-full bg-muted active:opacity-70"
+              className="size-8 items-center justify-center rounded-full bg-muted active:opacity-70 dark:bg-stone-800"
             >
-              <Icon as={X} size={16} className="text-foreground" />
+              <Icon
+                as={X}
+                size={16}
+                className="text-foreground dark:text-stone-50"
+              />
             </Pressable>
           ) : null}
         </View>
@@ -575,10 +614,10 @@ function CartPanel({
         {isEmpty ? (
           <View className="flex-1 items-center justify-center gap-1.5 p-6">
             <Text className="text-4xl">🛒</Text>
-            <Text className="font-dm-semibold text-sm text-foreground">
+            <Text className="font-dm-semibold text-sm text-foreground dark:text-stone-50">
               Keranjang kosong
             </Text>
-            <Text className="text-center font-dm-regular text-xs text-muted-foreground">
+            <Text className="text-center font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
               Tap produk di katalog untuk menambahkannya
             </Text>
           </View>
@@ -601,35 +640,37 @@ function CartPanel({
       </View>
 
       <View
-        className="border-t border-border/40 bg-muted/40 px-4 pt-3"
+        className="border-t border-border/40 bg-muted/40 px-4 pt-3 dark:border-stone-800/60 dark:bg-stone-800/30"
         style={{ paddingBottom: Math.max(bottomInset, 12) }}
       >
         <View className="mb-3 gap-1.5">
           <View className="flex-row justify-between">
-            <Text className="font-dm-regular text-xs text-muted-foreground">
+            <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
               Subtotal
             </Text>
-            <Text className="font-dm-medium text-xs text-foreground">
+            <Text className="font-dm-medium text-xs text-foreground dark:text-stone-50">
               {formatRupiah(subtotal)}
             </Text>
           </View>
 
           {discount > 0 ? (
             <View className="flex-row justify-between">
-              <Text className="font-dm-regular text-xs text-destructive">
+              <Text className="font-dm-regular text-xs text-destructive dark:text-red-400">
                 Diskon
               </Text>
-              <Text className="font-dm-medium text-xs text-destructive">
+              <Text className="font-dm-medium text-xs text-destructive dark:text-red-400">
                 -{formatRupiah(discount)}
               </Text>
             </View>
           ) : null}
 
-          <View className="my-1 h-px bg-border/60" />
+          <View className="my-1 h-px bg-border/60 dark:bg-stone-700/60" />
 
           <View className="flex-row items-center justify-between">
-            <Text className="font-dm-bold text-sm text-foreground">Total</Text>
-            <Text className="font-dm-extrabold text-xl leading-none tracking-tight text-primary">
+            <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
+              Total
+            </Text>
+            <Text className="font-dm-extrabold text-xl leading-none tracking-tight text-primary dark:text-sage-400">
               {formatRupiah(total)}
             </Text>
           </View>
@@ -640,14 +681,14 @@ function CartPanel({
           onPress={onCheckout}
           className={
             isEmpty
-              ? 'h-12 items-center justify-center rounded-full bg-muted'
-              : 'h-12 items-center justify-center rounded-full bg-primary active:opacity-90'
+              ? 'h-12 items-center justify-center rounded-full bg-muted dark:bg-stone-800'
+              : 'h-12 items-center justify-center rounded-full bg-primary active:opacity-90 dark:bg-sage-500'
           }
         >
           <Text
             className={
               isEmpty
-                ? 'font-dm-bold text-sm text-muted-foreground'
+                ? 'font-dm-bold text-sm text-muted-foreground dark:text-stone-500'
                 : 'font-dm-bold text-sm text-primary-foreground'
             }
           >
@@ -681,8 +722,8 @@ function CartRow({
     item.quantity >= item.minimalDiscount;
 
   return (
-    <View className="flex-row gap-2.5 border-b border-border/30 py-3">
-      <View className="size-11 items-center justify-center overflow-hidden rounded-xl bg-accent/60">
+    <View className="flex-row gap-2.5 border-b border-border/30 py-3 dark:border-stone-800/40">
+      <View className="size-11 items-center justify-center overflow-hidden rounded-xl bg-accent/60 dark:bg-stone-800">
         {item.imageUrl ? (
           <Image
             source={{ uri: item.imageUrl }}
@@ -697,18 +738,18 @@ function CartRow({
       <View className="flex-1 gap-2">
         <View>
           <Text
-            className="font-dm-semibold text-[13px] leading-tight text-foreground"
+            className="font-dm-semibold text-[13px] leading-tight text-foreground dark:text-stone-50"
             numberOfLines={1}
           >
             {item.name}
           </Text>
           <View className="mt-0.5 flex-row items-center gap-1.5">
-            <Text className="font-dm-regular text-xs text-muted-foreground">
+            <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
               {formatRupiah(ep)}
             </Text>
             {promoActive ? (
-              <View className="rounded bg-destructive/10 px-1 py-px">
-                <Text className="font-dm-bold text-[9px] text-destructive">
+              <View className="rounded bg-destructive/10 px-1 py-px dark:bg-red-500/15">
+                <Text className="font-dm-bold text-[9px] text-destructive dark:text-red-400">
                   PROMO
                 </Text>
               </View>
@@ -721,20 +762,28 @@ function CartRow({
             onPress={onDec}
             hitSlop={4}
             accessibilityLabel="Kurangi jumlah"
-            className="size-8 items-center justify-center rounded-lg border border-border/60 bg-white active:bg-muted"
+            className="size-8 items-center justify-center rounded-lg border border-border/60 bg-white active:bg-muted dark:border-stone-700/60 dark:bg-stone-900 dark:active:bg-stone-800"
           >
-            <Icon as={Minus} size={14} className="text-foreground" />
+            <Icon
+              as={Minus}
+              size={14}
+              className="text-foreground dark:text-stone-50"
+            />
           </Pressable>
-          <Text className="min-w-[28px] text-center font-dm-bold text-sm text-foreground">
+          <Text className="min-w-[28px] text-center font-dm-bold text-sm text-foreground dark:text-stone-50">
             {item.quantity}
           </Text>
           <Pressable
             onPress={onInc}
             hitSlop={4}
             accessibilityLabel="Tambah jumlah"
-            className="size-8 items-center justify-center rounded-lg border border-border/60 bg-white active:bg-muted"
+            className="size-8 items-center justify-center rounded-lg border border-border/60 bg-white active:bg-muted dark:border-stone-700/60 dark:bg-stone-900 dark:active:bg-stone-800"
           >
-            <Icon as={Plus} size={14} className="text-foreground" />
+            <Icon
+              as={Plus}
+              size={14}
+              className="text-foreground dark:text-stone-50"
+            />
           </Pressable>
         </View>
       </View>
@@ -746,9 +795,13 @@ function CartRow({
           accessibilityLabel="Hapus dari keranjang"
           className="p-0.5"
         >
-          <Icon as={Trash2} size={15} className="text-destructive/70" />
+          <Icon
+            as={Trash2}
+            size={15}
+            className="text-destructive/70 dark:text-red-400/70"
+          />
         </Pressable>
-        <Text className="font-dm-bold text-[13px] text-foreground">
+        <Text className="font-dm-bold text-[13px] text-foreground dark:text-stone-50">
           {formatRupiah(lineTotal)}
         </Text>
       </View>
@@ -825,13 +878,8 @@ function CheckoutModal({
         })),
         payment_amount: paymentNum,
       });
-      // Refresh riwayat transaksi (kalau ada screen history)
       queryClient.invalidateQueries({ queryKey: ['sales'] });
-
-      // Bersihkan cart
       clear();
-
-      // Callback ke parent untuk tampilkan struk
       onSuccess(sale);
     } catch (e) {
       setError(getErrorMessage(e));
@@ -859,15 +907,15 @@ function CheckoutModal({
               maxWidth: 460,
               maxHeight: '100%',
             }}
-            className="overflow-hidden rounded-3xl bg-white"
+            className="overflow-hidden rounded-3xl bg-white dark:bg-stone-900"
           >
             {/* Header */}
-            <View className="flex-row items-center justify-between border-b border-border/40 px-5 py-3.5">
+            <View className="flex-row items-center justify-between border-b border-border/40 px-5 py-3.5 dark:border-stone-800/60">
               <View>
-                <Text className="font-dm-bold text-base text-foreground">
+                <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
                   Pembayaran
                 </Text>
-                <Text className="font-dm-regular text-xs text-muted-foreground">
+                <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
                   Masukkan uang yang diterima
                 </Text>
               </View>
@@ -876,9 +924,13 @@ function CheckoutModal({
                 disabled={isSubmitting}
                 hitSlop={8}
                 accessibilityLabel="Tutup"
-                className="size-8 items-center justify-center rounded-full bg-muted active:opacity-70"
+                className="size-8 items-center justify-center rounded-full bg-muted active:opacity-70 dark:bg-stone-800"
               >
-                <Icon as={X} size={16} className="text-foreground" />
+                <Icon
+                  as={X}
+                  size={16}
+                  className="text-foreground dark:text-stone-50"
+                />
               </Pressable>
             </View>
 
@@ -888,9 +940,9 @@ function CheckoutModal({
               contentContainerStyle={{ padding: 16, gap: 12 }}
             >
               {/* Ringkasan item */}
-              <View className="overflow-hidden rounded-2xl border border-border/40 bg-white">
-                <View className="border-b border-border/40 px-4 py-2.5">
-                  <Text className="font-dm-bold text-xs text-foreground">
+              <View className="overflow-hidden rounded-2xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
+                <View className="border-b border-border/40 px-4 py-2.5 dark:border-stone-800/60">
+                  <Text className="font-dm-bold text-xs text-foreground dark:text-stone-50">
                     Ringkasan · {items.length} item
                   </Text>
                 </View>
@@ -903,9 +955,9 @@ function CheckoutModal({
                     return (
                       <View
                         key={item.productId}
-                        className="flex-row items-center gap-3 border-b border-border/30 py-2.5 last:border-b-0"
+                        className="flex-row items-center gap-3 border-b border-border/30 py-2.5 last:border-b-0 dark:border-stone-800/40"
                       >
-                        <View className="size-8 items-center justify-center overflow-hidden rounded-lg bg-accent/60">
+                        <View className="size-8 items-center justify-center overflow-hidden rounded-lg bg-accent/60 dark:bg-stone-800">
                           {item.imageUrl ? (
                             <Image
                               source={{ uri: item.imageUrl }}
@@ -919,17 +971,17 @@ function CheckoutModal({
 
                         <View className="flex-1">
                           <Text
-                            className="font-dm-semibold text-[12px] text-foreground"
+                            className="font-dm-semibold text-[12px] text-foreground dark:text-stone-50"
                             numberOfLines={1}
                           >
                             {item.name}
                           </Text>
-                          <Text className="font-dm-regular text-[10px] text-muted-foreground">
+                          <Text className="font-dm-regular text-[10px] text-muted-foreground dark:text-stone-400">
                             {item.quantity} × {formatRupiah(ep)}
                           </Text>
                         </View>
 
-                        <Text className="font-dm-bold text-[12px] text-foreground">
+                        <Text className="font-dm-bold text-[12px] text-foreground dark:text-stone-50">
                           {formatRupiah(lineTotal)}
                         </Text>
                       </View>
@@ -937,34 +989,34 @@ function CheckoutModal({
                   })}
                 </View>
 
-                <View className="gap-1.5 border-t border-border/40 bg-muted/30 px-4 py-3">
+                <View className="gap-1.5 border-t border-border/40 bg-muted/30 px-4 py-3 dark:border-stone-800/60 dark:bg-stone-800/20">
                   <View className="flex-row justify-between">
-                    <Text className="font-dm-regular text-xs text-muted-foreground">
+                    <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
                       Subtotal
                     </Text>
-                    <Text className="font-dm-medium text-xs text-foreground">
+                    <Text className="font-dm-medium text-xs text-foreground dark:text-stone-50">
                       {formatRupiah(subtotal)}
                     </Text>
                   </View>
 
                   {discount > 0 ? (
                     <View className="flex-row justify-between">
-                      <Text className="font-dm-regular text-xs text-destructive">
+                      <Text className="font-dm-regular text-xs text-destructive dark:text-red-400">
                         Diskon
                       </Text>
-                      <Text className="font-dm-medium text-xs text-destructive">
+                      <Text className="font-dm-medium text-xs text-destructive dark:text-red-400">
                         -{formatRupiah(discount)}
                       </Text>
                     </View>
                   ) : null}
 
-                  <View className="my-1 h-px bg-border/60" />
+                  <View className="my-1 h-px bg-border/60 dark:bg-stone-700/60" />
 
                   <View className="flex-row items-center justify-between">
-                    <Text className="font-dm-bold text-sm text-foreground">
+                    <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
                       Total
                     </Text>
-                    <Text className="font-dm-extrabold text-2xl leading-none tracking-tight text-primary">
+                    <Text className="font-dm-extrabold text-2xl leading-none tracking-tight text-primary dark:text-sage-400">
                       {formatRupiah(total)}
                     </Text>
                   </View>
@@ -972,18 +1024,18 @@ function CheckoutModal({
               </View>
 
               {/* Input uang diterima */}
-              <View className="gap-3 rounded-2xl border border-border/40 bg-white p-4">
-                <Text className="font-dm-bold text-xs text-foreground">
+              <View className="gap-3 rounded-2xl border border-border/40 bg-white p-4 dark:border-stone-800/60 dark:bg-stone-900">
+                <Text className="font-dm-bold text-xs text-foreground dark:text-stone-50">
                   Uang diterima
                 </Text>
 
-                <View className="h-14 flex-row items-center gap-3 rounded-xl border-[1.5px] border-border bg-white px-4">
+                <View className="h-14 flex-row items-center gap-3 rounded-xl border-[1.5px] border-border bg-white px-4 dark:border-stone-700 dark:bg-stone-900">
                   <Icon
                     as={Banknote}
                     size={20}
-                    className="text-muted-foreground"
+                    className="text-muted-foreground dark:text-stone-400"
                   />
-                  <Text className="font-dm-medium text-base text-muted-foreground">
+                  <Text className="font-dm-medium text-base text-muted-foreground dark:text-stone-400">
                     Rp
                   </Text>
                   <TextInput
@@ -998,12 +1050,12 @@ function CheckoutModal({
                     placeholderTextColor="#9CA3AF"
                     keyboardType="numeric"
                     editable={!isSubmitting}
-                    className="flex-1 py-0 font-dm-bold text-lg text-foreground"
+                    className="flex-1 py-0 font-dm-bold text-lg text-foreground dark:text-stone-50"
                     autoFocus
                   />
                 </View>
 
-                <View className="flex-row flex-wrap gap-2">
+                <View className="flex-row flex-wrap gap-2 justify-evenly">
                   {quick.map((amount) => {
                     const isExact = amount === total;
                     const active = paymentNum === amount;
@@ -1016,16 +1068,17 @@ function CheckoutModal({
                           if (error) setError(null);
                         }}
                         disabled={isSubmitting}
-                        className={`h-9 flex-row items-center gap-1 rounded-full border px-3.5 active:opacity-80 ${active
-                            ? 'border-primary bg-primary'
-                            : 'border-border/60 bg-white'
+                        className={`h-9 min-w-[80px] items-center justify-center rounded-full border active:opacity-80 ${active
+                          ? 'border-primary bg-primary dark:border-sage-500 dark:bg-sage-500'
+                          : 'border-border/60 bg-white dark:border-stone-700/60 dark:bg-stone-900'
                           }`}
                       >
                         <Text
                           className={`font-dm-bold text-xs ${active
-                              ? 'text-primary-foreground'
-                              : 'text-foreground'
+                            ? 'text-primary-foreground'
+                            : 'text-foreground dark:text-stone-50'
                             }`}
+                          numberOfLines={1}
                         >
                           {isExact ? 'Pas' : formatRupiah(amount)}
                         </Text>
@@ -1038,19 +1091,23 @@ function CheckoutModal({
               {/* Kembalian */}
               <View
                 className={`overflow-hidden rounded-2xl border ${change >= 0
-                    ? 'border-primary/30 bg-primary/5'
-                    : 'border-destructive/30 bg-destructive/5'
+                  ? 'border-primary/30 bg-primary/5 dark:border-sage-500/30 dark:bg-sage-500/10'
+                  : 'border-destructive/30 bg-destructive/5 dark:border-red-500/30 dark:bg-red-500/10'
                   }`}
               >
                 <View className="flex-row items-center justify-between px-4 py-3.5">
                   <Text
-                    className={`font-dm-semibold text-sm ${change >= 0 ? 'text-foreground' : 'text-destructive'
+                    className={`font-dm-semibold text-sm ${change >= 0
+                      ? 'text-foreground dark:text-stone-50'
+                      : 'text-destructive dark:text-red-400'
                       }`}
                   >
                     {change >= 0 ? 'Kembalian' : 'Kurang'}
                   </Text>
                   <Text
-                    className={`font-dm-extrabold text-xl leading-none tracking-tight ${change >= 0 ? 'text-primary' : 'text-destructive'
+                    className={`font-dm-extrabold text-xl leading-none tracking-tight ${change >= 0
+                      ? 'text-primary dark:text-sage-400'
+                      : 'text-destructive dark:text-red-400'
                       }`}
                   >
                     {formatRupiah(Math.abs(change))}
@@ -1059,8 +1116,8 @@ function CheckoutModal({
               </View>
 
               {error ? (
-                <View className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2.5">
-                  <Text className="font-dm-regular text-xs text-destructive">
+                <View className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2.5 dark:border-red-500/30 dark:bg-red-500/15">
+                  <Text className="font-dm-regular text-xs text-destructive dark:text-red-400">
                     {error}
                   </Text>
                 </View>
@@ -1069,7 +1126,7 @@ function CheckoutModal({
 
             {/* Footer */}
             <View
-              className="border-t border-border/40 bg-white px-4 pt-3"
+              className="border-t border-border/40 bg-white px-4 pt-3 dark:border-stone-800/60 dark:bg-stone-900"
               style={{ paddingBottom: Math.max(bottomInset, 12) }}
             >
               <Pressable
@@ -1077,14 +1134,14 @@ function CheckoutModal({
                 disabled={!canSubmit}
                 className={
                   canSubmit
-                    ? 'h-12 flex-row items-center justify-center gap-2 rounded-full bg-primary active:opacity-90'
-                    : 'h-12 flex-row items-center justify-center gap-2 rounded-full bg-muted'
+                    ? 'h-12 flex-row items-center justify-center gap-2 rounded-full bg-primary active:opacity-90 dark:bg-sage-500'
+                    : 'h-12 flex-row items-center justify-center gap-2 rounded-full bg-muted dark:bg-stone-800'
                 }
               >
                 {isSubmitting ? (
                   <>
                     <ActivityIndicator size="small" color="#FFFFFF" />
-                    <Text className="font-dm-bold text-sm text-primary-foreground">
+                    <Text className="font-dm-bold text-sm text-primary-foreground dark:text-zinc-300">
                       Memproses...
                     </Text>
                   </>
@@ -1096,14 +1153,14 @@ function CheckoutModal({
                       className={
                         canSubmit
                           ? 'text-primary-foreground'
-                          : 'text-muted-foreground'
+                          : 'text-muted-foreground dark:text-stone-500'
                       }
                     />
                     <Text
                       className={
                         canSubmit
                           ? 'font-dm-bold text-sm text-primary-foreground'
-                          : 'font-dm-bold text-sm text-muted-foreground'
+                          : 'font-dm-bold text-sm text-muted-foreground dark:text-stone-500'
                       }
                     >
                       Selesai &amp; Bayar

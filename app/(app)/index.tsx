@@ -14,6 +14,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
+import { useColorScheme } from 'nativewind';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import {
@@ -49,12 +50,15 @@ import { formatRupiah } from '@/lib/format';
    ══════════════════════════════════════════════════════ */
 const HEADER_HEIGHT = 60;
 const PRODUCT_PREVIEW_LIMIT = 5;
-const RECENT_ITEM_HEIGHT = 62;   // estimasi tinggi 1 baris
+const RECENT_ITEM_HEIGHT = 62;
 const RECENT_VISIBLE_ITEMS = 5;
 const RECENT_MAX_HEIGHT = RECENT_ITEM_HEIGHT * RECENT_VISIBLE_ITEMS;
 
 const WELCOME_GRADIENT_A = ['#EEF5F0', '#DCEBE1', '#CBDFD3'] as const;
 const WELCOME_GRADIENT_B = ['#E9F1F4', '#D8E6EC', '#E4EEE7'] as const;
+
+const WELCOME_GRADIENT_A_DARK = ['#0F1F17', '#0A1712', '#071210'] as const;
+const WELCOME_GRADIENT_B_DARK = ['#0A1418', '#091418', '#0A1712'] as const;
 
 /* ── Helper ── */
 function getGreeting() {
@@ -87,18 +91,18 @@ function formatTime(iso: string): string {
 export default function DashboardScreen() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   const { user, signOut } = useSession();
 
   const isWide = width >= 900;
   const storeId = user?.store_id;
 
-  /* ── User info ── */
   const cashierName = user?.name ?? 'Kasir';
   const storeName = user?.store?.name ?? 'Toko';
   const initial = cashierName.charAt(0).toUpperCase() || 'K';
 
-  /* ── Live date + time (update tiap 30 detik) ── */
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -136,7 +140,6 @@ export default function DashboardScreen() {
     [now]
   );
 
-  /* ── Produk ── */
   const { data: products = [] } = useProducts(storeId);
 
   const activeProducts = useMemo(
@@ -154,7 +157,6 @@ export default function DashboardScreen() {
     [products]
   );
 
-  /* ── Sales hari ini ── */
   const today = todayString();
 
   const { data: salesToday } = useQuery({
@@ -173,17 +175,12 @@ export default function DashboardScreen() {
     const list = salesToday?.data ?? [];
     const salesTotal = list.reduce((a, s) => a + s.total, 0);
     const transactions = list.length;
-    const itemsSold = list.reduce((a, s) => a + (s.total_quantity ?? 0), 0);   // ⭐ FIX
+    const itemsSold = list.reduce((a, s) => a + (s.total_quantity ?? 0), 0);
     return { salesTotal, transactions, itemsSold };
   }, [salesToday]);
 
-  /* ── Recent transactions — HANYA HARI INI ── */
-  const recent = useMemo(
-    () => salesToday?.data ?? [],
-    [salesToday]
-  );
+  const recent = useMemo(() => salesToday?.data ?? [], [salesToday]);
 
-  /* ── Detail transaksi (untuk modal) ── */
   const [selectedSaleId, setSelectedSaleId] = useState<number | null>(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -203,7 +200,6 @@ export default function DashboardScreen() {
     setSelectedSaleId(null);
   }, []);
 
-  /* ── Handlers ── */
   const openCashier = useCallback(() => {
     router.push('/(app)/cashier');
   }, []);
@@ -249,7 +245,7 @@ export default function DashboardScreen() {
   );
 
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-white dark:bg-stone-950">
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={scrollContentStyle}
@@ -297,35 +293,34 @@ export default function DashboardScreen() {
       {/* ══ GLASS HEADER ══ */}
       <BlurView
         intensity={70}
-        tint="light"
+        tint={isDark ? 'dark' : 'light'}
         style={headerBlurStyle}
         className="overflow-hidden"
       >
-        <View className="absolute bottom-0 left-0 right-0 h-px bg-border/40" />
+        <View className="absolute bottom-0 left-0 right-0 h-px bg-border/40 dark:bg-stone-800/60" />
 
         <View
           style={{ height: HEADER_HEIGHT }}
           className="flex-row items-center gap-3 px-4"
         >
-          <View className="size-10 items-center justify-center rounded-full bg-primary">
+          <View className="size-10 items-center justify-center rounded-full bg-primary dark:bg-sage-500">
             <Text className="font-dm-extrabold text-sm text-primary-foreground">
               {initial}
             </Text>
           </View>
 
           <View className="flex-1">
-            <Text className="font-dm-regular text-xs text-muted-foreground">
+            <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
               {getGreeting()}
             </Text>
             <Text
-              className="font-dm-bold text-base leading-tight text-foreground"
+              className="font-dm-bold text-base leading-tight text-foreground dark:text-stone-50"
               numberOfLines={1}
             >
               {cashierName}
             </Text>
           </View>
 
-          {/* ⭐ Modern date + time pill */}
           <DateTimePill
             time={timeLabel}
             dayLabel={dayLabel}
@@ -337,9 +332,13 @@ export default function DashboardScreen() {
             onPress={requestLogout}
             hitSlop={8}
             accessibilityLabel="Keluar"
-            className="size-10 items-center justify-center rounded-full active:bg-muted/60"
+            className="size-10 items-center justify-center rounded-full active:bg-muted/60 dark:active:bg-stone-800/60"
           >
-            <Icon as={LogOut} size={18} className="text-muted-foreground" />
+            <Icon
+              as={LogOut}
+              size={18}
+              className="text-muted-foreground dark:text-stone-400"
+            />
           </Pressable>
         </View>
       </BlurView>
@@ -352,9 +351,9 @@ export default function DashboardScreen() {
         onRequestClose={closeDetail}
       >
         <View className="flex-1 items-center justify-center bg-black/40">
-          <View className="items-center gap-3 rounded-2xl bg-white p-6">
+          <View className="items-center gap-3 rounded-2xl bg-white p-6 dark:bg-stone-900">
             <ActivityIndicator size="large" />
-            <Text className="font-dm-regular text-xs text-muted-foreground">
+            <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
               Memuat detail transaksi...
             </Text>
           </View>
@@ -380,7 +379,7 @@ export default function DashboardScreen() {
 }
 
 /* ══════════════════════════════════════════════════════
-   DateTime Pill — Modern Display
+   DateTime Pill
    ══════════════════════════════════════════════════════ */
 const DateTimePill = React.memo(function DateTimePill({
   time,
@@ -394,26 +393,28 @@ const DateTimePill = React.memo(function DateTimePill({
   expanded: boolean;
 }) {
   if (!expanded) {
-    // ⭐ Mobile: compact pill dengan jam saja
     return (
-      <View className="flex-row items-center gap-1.5 rounded-full border border-border/40 bg-white/70 px-2.5 py-1.5">
-        <View className="size-1.5 rounded-full bg-primary" />
-        <Text className="font-mono text-[11px] font-bold tracking-tight text-foreground">
+      <View className="flex-row items-center gap-1.5 rounded-full border border-border/40 bg-white/70 px-2.5 py-1.5 dark:border-stone-800/60 dark:bg-stone-900/70">
+        <View className="size-1.5 rounded-full bg-primary dark:bg-sage-400" />
+        <Text className="font-mono text-[11px] font-bold tracking-tight text-foreground dark:text-stone-50">
           {time}
         </Text>
       </View>
     );
   }
 
-  // ⭐ Tablet: pill dengan jam + tanggal
   return (
-    <View className="flex-row items-center gap-2 rounded-full border border-border/40 bg-white/70 px-3 py-1.5">
-      <Icon as={Clock} size={11} className="text-primary" />
-      <Text className="font-mono text-[11px] font-bold tracking-tight text-foreground">
+    <View className="flex-row items-center gap-2 rounded-full border border-border/40 bg-white/70 px-3 py-1.5 dark:border-stone-800/60 dark:bg-stone-900/70">
+      <Icon
+        as={Clock}
+        size={11}
+        className="text-primary dark:text-sage-400"
+      />
+      <Text className="font-mono text-[11px] font-bold tracking-tight text-foreground dark:text-stone-50">
         {time}
       </Text>
-      <View className="h-3 w-px bg-border/60" />
-      <Text className="font-dm-medium text-[10.5px] text-muted-foreground">
+      <View className="h-3 w-px bg-border/60 dark:bg-stone-700/60" />
+      <Text className="font-dm-medium text-[10.5px] text-muted-foreground dark:text-stone-400">
         {fullDate}
       </Text>
     </View>
@@ -450,34 +451,34 @@ const LogoutConfirmModal = React.memo(function LogoutConfirmModal({
 
         <View
           style={{ width: '100%', maxWidth: 360 }}
-          className="overflow-hidden rounded-3xl bg-white"
+          className="overflow-hidden rounded-3xl bg-white dark:bg-stone-900"
         >
           <View className="items-center gap-3 px-6 pt-6">
-            <View className="size-14 items-center justify-center rounded-full bg-destructive/10">
+            <View className="size-14 items-center justify-center rounded-full bg-destructive/10 dark:bg-red-500/15">
               <Icon
                 as={AlertTriangle}
                 size={26}
-                className="text-destructive"
+                className="text-destructive dark:text-red-400"
               />
             </View>
 
             <View className="items-center gap-1">
-              <Text className="font-dm-bold text-base text-foreground">
+              <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
                 Keluar dari aplikasi?
               </Text>
-              <Text className="text-center font-dm-regular text-xs leading-4 text-muted-foreground">
+              <Text className="text-center font-dm-regular text-xs leading-4 text-muted-foreground dark:text-stone-400">
                 Anda harus login kembali untuk melanjutkan transaksi.
               </Text>
             </View>
           </View>
 
-          <View className="mt-6 flex-row gap-2 border-t border-border/40 bg-muted/30 p-4">
+          <View className="mt-6 flex-row gap-2 border-t border-border/40 bg-muted/30 p-4 dark:border-stone-800/60 dark:bg-stone-800/30">
             <Pressable
               onPress={onCancel}
               disabled={isLoading}
-              className="h-11 flex-1 items-center justify-center rounded-full border border-border/60 bg-white active:opacity-80"
+              className="h-11 flex-1 items-center justify-center rounded-full border border-border/60 bg-white active:opacity-80 dark:border-stone-700/60 dark:bg-stone-900"
             >
-              <Text className="font-dm-bold text-sm text-foreground">
+              <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
                 Batal
               </Text>
             </Pressable>
@@ -487,8 +488,8 @@ const LogoutConfirmModal = React.memo(function LogoutConfirmModal({
               disabled={isLoading}
               className={
                 isLoading
-                  ? 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-destructive/60'
-                  : 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-destructive active:opacity-90'
+                  ? 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-destructive/60 dark:bg-red-500/50'
+                  : 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-destructive active:opacity-90 dark:bg-red-500'
               }
             >
               {isLoading ? (
@@ -500,12 +501,8 @@ const LogoutConfirmModal = React.memo(function LogoutConfirmModal({
                 </>
               ) : (
                 <>
-                  <Icon
-                    as={LogOut}
-                    size={15}
-                    className="text-destructive-foreground"
-                  />
-                  <Text className="font-dm-bold text-sm text-destructive-foreground">
+                  <Icon as={LogOut} size={15} className="text-white" />
+                  <Text className="font-dm-bold text-sm text-white">
                     Keluar
                   </Text>
                 </>
@@ -534,6 +531,12 @@ const StartCard = React.memo(function StartCard({
   promoProducts: number;
   large?: boolean;
 }) {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const gradientA = isDark ? WELCOME_GRADIENT_A_DARK : WELCOME_GRADIENT_A;
+  const gradientB = isDark ? WELCOME_GRADIENT_B_DARK : WELCOME_GRADIENT_B;
+
   const pressStyle = useCallback(
     ({ pressed }: { pressed: boolean }) => ({
       transform: [{ scale: pressed ? 0.97 : 1 }],
@@ -543,48 +546,64 @@ const StartCard = React.memo(function StartCard({
 
   return (
     <View
-      className={`overflow-hidden rounded-3xl border border-border/40 ${large ? 'p-8' : 'p-6'
-        }`}
+      className={`overflow-hidden rounded-3xl border border-border/40 dark:border-stone-800/60 ${
+        large ? 'p-8' : 'p-6'
+      }`}
     >
       <LinearGradient
-        colors={WELCOME_GRADIENT_A}
+        colors={gradientA}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
       <LinearGradient
-        colors={WELCOME_GRADIENT_B}
+        colors={gradientB}
         start={{ x: 1, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
       />
 
-      <View className="absolute -right-20 -top-20 size-64 rounded-full bg-white/40" />
-      <View className="absolute -bottom-24 right-16 size-48 rounded-full bg-white/20" />
+      {/* Orbs — warna conditional */}
+      <View
+        className="absolute -right-20 -top-20 size-64 rounded-full"
+        style={{
+          backgroundColor: isDark
+            ? 'rgba(132,169,140,0.06)'
+            : 'rgba(255,255,255,0.4)',
+        }}
+      />
+      <View
+        className="absolute -bottom-24 right-16 size-48 rounded-full"
+        style={{
+          backgroundColor: isDark
+            ? 'rgba(132,169,140,0.04)'
+            : 'rgba(255,255,255,0.2)',
+        }}
+      />
 
       <View className="relative">
-        <Text className="font-dm-medium text-xs text-muted-foreground">
+        <Text className="font-dm-medium text-xs text-muted-foreground dark:text-stone-400">
           {storeName}
         </Text>
 
         <Text
-          className={`mt-1 font-dm-extrabold tracking-tight text-foreground ${large ? 'text-4xl' : 'text-3xl'
-            }`}
+          className={`mt-1 font-dm-extrabold tracking-tight text-foreground dark:text-stone-50 ${
+            large ? 'text-4xl' : 'text-3xl'
+          }`}
         >
           Mulai transaksi
         </Text>
-        <Text className="mt-1.5 max-w-[360px] font-dm-regular text-sm leading-5 text-muted-foreground">
+        <Text className="mt-1.5 max-w-[360px] font-dm-regular text-sm leading-5 text-muted-foreground dark:text-stone-400">
           Pilih produk, hitung total, lalu terima pembayaran.
         </Text>
 
         <View className="mt-6 flex-row flex-wrap items-center gap-3">
-          {/* ⭐ Hanya tombol ini yang Pressable */}
           <Pressable
             onPress={onPress}
             accessibilityRole="button"
             accessibilityLabel="Mulai transaksi"
             style={pressStyle}
-            className="h-12 flex-row items-center gap-2 rounded-full bg-primary px-5 active:opacity-90"
+            className="h-12 flex-row items-center gap-2 rounded-full bg-primary px-5 active:opacity-90 dark:bg-sage-500"
           >
             <Icon
               as={ShoppingCart}
@@ -619,9 +638,15 @@ const Pill = React.memo(function Pill({
   text: string;
 }) {
   return (
-    <View className="h-8 flex-row items-center gap-1.5 rounded-full border border-border/40 bg-white/70 px-3">
-      <Icon as={icon} size={13} className="text-primary" />
-      <Text className="font-dm-medium text-xs text-foreground">{text}</Text>
+    <View className="h-8 flex-row items-center gap-1.5 rounded-full border border-border/40 bg-white/70 px-3 dark:border-stone-800/60 dark:bg-stone-900/70">
+      <Icon
+        as={icon}
+        size={13}
+        className="text-primary dark:text-sage-400"
+      />
+      <Text className="font-dm-medium text-xs text-foreground dark:text-stone-50">
+        {text}
+      </Text>
     </View>
   );
 });
@@ -642,18 +667,23 @@ const StatCard = React.memo(function StatCard({
 }) {
   return (
     <View
-      className={`min-w-[140px] gap-3 rounded-2xl border border-border/40 bg-white p-4 ${wide ? 'w-full' : 'flex-1'
-        }`}
+      className={`min-w-[140px] gap-3 rounded-2xl border border-border/40 bg-white p-4 dark:border-stone-800/60 dark:bg-stone-900 ${
+        wide ? 'w-full' : 'flex-1'
+      }`}
     >
-      <View className="size-9 items-center justify-center rounded-xl bg-accent/60">
-        <Icon as={icon} size={17} className="text-primary" />
+      <View className="size-9 items-center justify-center rounded-xl bg-accent/60 dark:bg-stone-800">
+        <Icon
+          as={icon}
+          size={17}
+          className="text-primary dark:text-sage-400"
+        />
       </View>
       <View className="gap-0.5">
-        <Text className="font-dm-regular text-xs text-muted-foreground">
+        <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
           {label}
         </Text>
         <Text
-          className="font-dm-extrabold text-2xl leading-tight tracking-tight text-foreground"
+          className="font-dm-extrabold text-2xl leading-tight tracking-tight text-foreground dark:text-stone-50"
           numberOfLines={1}
           adjustsFontSizeToFit
         >
@@ -665,7 +695,7 @@ const StatCard = React.memo(function StatCard({
 });
 
 /* ══════════════════════════════════════════════════════
-   Product Sales Card — Jumlah terjual per produk
+   Product Sales Card
    ══════════════════════════════════════════════════════ */
 const ProductSalesCard = React.memo(function ProductSalesCard({
   products,
@@ -674,45 +704,44 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
 }) {
   const isEmpty = products.length === 0;
 
-  // Ambil max qty untuk progress bar
   const maxQty = useMemo(
     () => Math.max(...products.map((p) => Number(p.total_qty)), 1),
     [products]
   );
 
   return (
-    <View className="overflow-hidden rounded-xl border border-border/40 bg-white">
-      {/* ══ Header ══ */}
-      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3">
+    <View className="overflow-hidden rounded-xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
+      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3 dark:border-stone-800/60">
         <View className="flex-row items-center gap-2.5">
-          {/* Icon box — sage/green */}
-          <View className="size-7 items-center justify-center rounded-lg bg-primary/10">
-            <Icon as={Package} size={14} className="text-primary" />
+          <View className="size-7 items-center justify-center rounded-lg bg-primary/10 dark:bg-sage-500/15">
+            <Icon
+              as={Package}
+              size={14}
+              className="text-primary dark:text-sage-400"
+            />
           </View>
 
           <View>
-            <Text className="font-dm-bold text-xs text-foreground">
+            <Text className="font-dm-bold text-xs text-foreground dark:text-stone-50">
               Produk Terjual
             </Text>
-            <Text className="font-dm-regular text-[10px] text-muted-foreground">
+            <Text className="font-dm-regular text-[10px] text-muted-foreground dark:text-stone-400">
               Terurut dari yang paling banyak
             </Text>
           </View>
         </View>
 
-        {/* Count badge */}
-        <View className="rounded-full bg-muted px-2 py-0.5">
-          <Text className="font-mono text-[10px] font-bold text-muted-foreground">
+        <View className="rounded-full bg-muted px-2 py-0.5 dark:bg-stone-800">
+          <Text className="font-mono text-[10px] font-bold text-muted-foreground dark:text-stone-400">
             {products.length}
           </Text>
         </View>
       </View>
 
-      {/* ══ Body ══ */}
       {isEmpty ? (
         <View className="items-center gap-2 px-4 py-10">
           <Text className="text-3xl">📊</Text>
-          <Text className="text-center font-dm-medium text-xs text-muted-foreground">
+          <Text className="text-center font-dm-medium text-xs text-muted-foreground dark:text-stone-400">
             Belum ada produk terjual hari ini
           </Text>
         </View>
@@ -727,11 +756,10 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
                 key={product.product_id}
                 className={`flex-row items-center gap-3 px-4 py-2.5 ${
                   index < products.length - 1
-                    ? 'border-b border-border/30'
+                    ? 'border-b border-border/30 dark:border-stone-800/40'
                     : ''
                 }`}
               >
-                {/* ── Rank badge ── */}
                 <View
                   className={`size-6 shrink-0 items-center justify-center rounded-full ${
                     index === 0
@@ -758,33 +786,28 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
                   </Text>
                 </View>
 
-                {/* ── Info ── */}
                 <View className="min-w-0 flex-1">
-                  {/* Row 1: name + qty */}
                   <View className="flex-row items-center justify-between gap-2">
                     <Text
-                      className="flex-1 truncate font-dm-medium text-[11px] text-foreground"
+                      className="flex-1 truncate font-dm-medium text-[11px] text-foreground dark:text-stone-50"
                       numberOfLines={1}
                     >
                       {product.product_name}
                     </Text>
-                    <Text className="shrink-0 font-mono text-[11px] font-bold text-foreground">
+                    <Text className="shrink-0 font-mono text-[11px] font-bold text-foreground dark:text-stone-50">
                       {qty} pcs
                     </Text>
                   </View>
 
-                  {/* Row 2: progress bar + revenue */}
                   <View className="mt-1 flex-row items-center gap-2">
-                    {/* Progress bar */}
-                    <View className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                    <View className="h-1 flex-1 overflow-hidden rounded-full bg-muted dark:bg-stone-800">
                       <View
                         style={{ width: `${percentage}%` }}
-                        className="h-full rounded-full bg-primary"
+                        className="h-full rounded-full bg-primary dark:bg-sage-400"
                       />
                     </View>
 
-                    {/* Revenue */}
-                    <Text className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                    <Text className="shrink-0 font-mono text-[10px] text-muted-foreground dark:text-stone-400">
                       Rp {Number(product.total_revenue).toLocaleString('id-ID')}
                     </Text>
                   </View>
@@ -799,7 +822,7 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
 });
 
 /* ══════════════════════════════════════════════════════
-   Recent Card — HANYA HARI INI
+   Recent Card
    ══════════════════════════════════════════════════════ */
 const RecentCard = React.memo(function RecentCard({
   sales,
@@ -812,33 +835,31 @@ const RecentCard = React.memo(function RecentCard({
   const hasMore = sales.length > RECENT_VISIBLE_ITEMS;
 
   return (
-    <View className="overflow-hidden rounded-2xl border border-border/40 bg-white">
-      {/* Header */}
-      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3">
-        <Text className="font-dm-bold text-sm text-foreground">
+    <View className="overflow-hidden rounded-2xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
+      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3 dark:border-stone-800/60">
+        <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
           Transaksi hari ini
         </Text>
         {!isEmpty ? (
-          <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5">
+          <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 dark:bg-sage-500">
             <Text className="font-dm-bold text-[11px] text-primary-foreground">
               {sales.length}
             </Text>
           </View>
         ) : (
-          <Text className="font-dm-regular text-xs text-muted-foreground">
+          <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
             —
           </Text>
         )}
       </View>
 
-      {/* Body */}
       {isEmpty ? (
         <View className="items-center gap-1 px-4 py-10">
           <Text className="text-3xl">🧾</Text>
-          <Text className="font-dm-semibold text-sm text-foreground">
+          <Text className="font-dm-semibold text-sm text-foreground dark:text-stone-50">
             Belum ada transaksi
           </Text>
-          <Text className="text-center font-dm-regular text-xs text-muted-foreground">
+          <Text className="text-center font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
             Transaksi hari ini akan muncul di sini
           </Text>
         </View>
@@ -859,29 +880,36 @@ const RecentCard = React.memo(function RecentCard({
                 onPress={() => onSalePress(t.id)}
                 accessibilityRole="button"
                 accessibilityLabel={`Lihat detail transaksi ${t.invoice_number}`}
-                className={`flex-row items-center gap-3 px-4 py-3 active:bg-muted/40 ${i < sales.length - 1 ? 'border-b border-border/30' : ''
-                  }`}
+                className={`flex-row items-center gap-3 px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${
+                  i < sales.length - 1
+                    ? 'border-b border-border/30 dark:border-stone-800/40'
+                    : ''
+                }`}
               >
-                <View className="size-10 items-center justify-center rounded-full bg-accent/60">
-                  <Icon as={Receipt} size={16} className="text-primary" />
+                <View className="size-10 items-center justify-center rounded-full bg-accent/60 dark:bg-stone-800">
+                  <Icon
+                    as={Receipt}
+                    size={16}
+                    className="text-primary dark:text-sage-400"
+                  />
                 </View>
 
                 <View className="flex-1">
-                  <Text className="font-dm-semibold text-[13px] text-foreground">
+                  <Text className="font-dm-semibold text-[13px] text-foreground dark:text-stone-50">
                     #{shortId}
                   </Text>
-                  <Text className="font-dm-regular text-xs text-muted-foreground">
+                  <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
                     {formatTime(t.sale_date)} WIB, {t.items_count} item
                   </Text>
                 </View>
 
-                <Text className="font-dm-bold text-[13px] text-foreground">
+                <Text className="font-dm-bold text-[13px] text-foreground dark:text-stone-50">
                   {formatRupiah(t.total)}
                 </Text>
                 <Icon
                   as={ChevronRight}
                   size={15}
-                  className="text-muted-foreground/60"
+                  className="text-muted-foreground/60 dark:text-stone-500/60"
                 />
               </Pressable>
             );
@@ -889,10 +917,9 @@ const RecentCard = React.memo(function RecentCard({
         </ScrollView>
       )}
 
-      {/* Footer hint — kalau lebih dari 5 */}
       {hasMore ? (
-        <View className="border-t border-border/40 bg-muted/30 px-4 py-2">
-          <Text className="text-center font-dm-regular text-[10.5px] text-muted-foreground">
+        <View className="border-t border-border/40 bg-muted/30 px-4 py-2 dark:border-stone-800/60 dark:bg-stone-800/30">
+          <Text className="text-center font-dm-regular text-[10.5px] text-muted-foreground dark:text-stone-400">
             Scroll untuk melihat {sales.length - RECENT_VISIBLE_ITEMS} lainnya
           </Text>
         </View>
@@ -916,7 +943,7 @@ function ProductImage({
   return (
     <View
       style={{ width: size, height: size }}
-      className="items-center justify-center overflow-hidden rounded-xl border border-border/40 bg-accent/60"
+      className="items-center justify-center overflow-hidden rounded-xl border border-border/40 bg-accent/60 dark:border-stone-800/60 dark:bg-stone-800"
     >
       {showImage ? (
         <Image
@@ -926,9 +953,7 @@ function ProductImage({
           onError={() => setFailed(true)}
         />
       ) : (
-        <Text style={{ fontSize: size * 0.5 }}>
-          {emoji ?? '📦'}
-        </Text>
+        <Text style={{ fontSize: size * 0.5 }}>{emoji ?? '📦'}</Text>
       )}
     </View>
   );
@@ -946,17 +971,20 @@ const ProductListCard = React.memo(function ProductListCard({
   const preview = products.slice(0, PRODUCT_PREVIEW_LIMIT);
   const remaining = products.length - preview.length;
   return (
-    <View className="overflow-hidden rounded-2xl border border-border/40 bg-white">
-      {/* Header */}
-      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3">
+    <View className="overflow-hidden rounded-2xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
+      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3 dark:border-stone-800/60">
         <View className="flex-row items-center gap-2">
-          <Icon as={StoreIcon} size={15} className="text-primary" />
-          <Text className="font-dm-bold text-sm text-foreground">
+          <Icon
+            as={StoreIcon}
+            size={15}
+            className="text-primary dark:text-sage-400"
+          />
+          <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
             Produk di toko Anda
           </Text>
         </View>
         {!isEmpty ? (
-          <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5">
+          <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 dark:bg-sage-500">
             <Text className="font-dm-bold text-[11px] text-primary-foreground">
               {products.length}
             </Text>
@@ -964,14 +992,13 @@ const ProductListCard = React.memo(function ProductListCard({
         ) : null}
       </View>
 
-      {/* Body */}
       {isEmpty ? (
         <View className="items-center gap-1 px-4 py-10">
           <Text className="text-3xl">📦</Text>
-          <Text className="font-dm-semibold text-sm text-foreground">
+          <Text className="font-dm-semibold text-sm text-foreground dark:text-stone-50">
             Belum ada produk
           </Text>
-          <Text className="text-center font-dm-regular text-xs text-muted-foreground">
+          <Text className="text-center font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
             Admin belum meng-assign produk ke toko Anda
           </Text>
         </View>
@@ -985,29 +1012,28 @@ const ProductListCard = React.memo(function ProductListCard({
             return (
               <View
                 key={p.id}
-                className={`flex-row items-center gap-3 px-4 py-2.5 ${i < preview.length - 1 || remaining > 0
-                    ? 'border-b border-border/30'
+                className={`flex-row items-center gap-3 px-4 py-2.5 ${
+                  i < preview.length - 1 || remaining > 0
+                    ? 'border-b border-border/30 dark:border-stone-800/40'
                     : ''
-                  }`}
+                }`}
               >
-                {/* ⭐ Image — 48x48, dengan error fallback */}
                 <ProductImage uri={p.image_url} emoji={p.emoji} size={48} />
 
-                {/* Info */}
                 <View className="flex-1">
                   <Text
-                    className="font-dm-semibold text-[12px] leading-tight text-foreground"
+                    className="font-dm-semibold text-[12px] leading-tight text-foreground dark:text-stone-50"
                     numberOfLines={1}
                   >
                     {p.name}
                   </Text>
                   <View className="mt-0.5 flex-row items-center gap-1.5">
-                    <Text className="font-mono text-[10px] text-muted-foreground">
+                    <Text className="font-mono text-[10px] text-muted-foreground dark:text-stone-400">
                       {p.code}
                     </Text>
                     {hasPromo ? (
-                      <View className="rounded bg-destructive/10 px-1 py-px">
-                        <Text className="font-dm-bold text-[8px] text-destructive">
+                      <View className="rounded bg-destructive/10 px-1 py-px dark:bg-red-500/15">
+                        <Text className="font-dm-bold text-[8px] text-destructive dark:text-red-400">
                           PROMO
                         </Text>
                       </View>
@@ -1015,14 +1041,13 @@ const ProductListCard = React.memo(function ProductListCard({
                   </View>
                 </View>
 
-                {/* Price */}
                 <View className="items-end">
                   {hasPromo ? (
-                    <Text className="font-dm-regular text-[9px] text-muted-foreground line-through">
+                    <Text className="font-dm-regular text-[9px] text-muted-foreground line-through dark:text-stone-400">
                       {formatRupiah(p.price, false)}
                     </Text>
                   ) : null}
-                  <Text className="font-dm-bold text-[12px] text-foreground">
+                  <Text className="font-dm-bold text-[12px] text-foreground dark:text-stone-50">
                     {formatRupiah(displayPrice, false)}
                   </Text>
                 </View>
@@ -1030,10 +1055,9 @@ const ProductListCard = React.memo(function ProductListCard({
             );
           })}
 
-          {/* Footer hint */}
           {remaining > 0 ? (
-            <View className="bg-muted/30 px-4 py-2.5">
-              <Text className="text-center font-dm-regular text-[11px] text-muted-foreground">
+            <View className="bg-muted/30 px-4 py-2.5 dark:bg-stone-800/30">
+              <Text className="text-center font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
                 dan {remaining} produk lainnya
               </Text>
             </View>
