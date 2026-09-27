@@ -1,19 +1,18 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   View,
   Image,
   Animated,
   Easing,
   AccessibilityInfo,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
-import { useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColorScheme } from 'nativewind';
 import { Text } from '@/components/ui/text';
 
 const LOGO = require('@/assets/images/icon.png');
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 /* ══════════════════════════════════════════════════════
    Theme Tokens
@@ -58,14 +57,78 @@ function useReduceMotion() {
 }
 
 /* ══════════════════════════════════════════════════════
-   Loading Dots — 3 dot berdenyut bergantian
+   Responsive sizing hook
+   ══════════════════════════════════════════════════════ */
+function useResponsiveSizes(width: number, height: number) {
+  return useMemo(() => {
+    const isTablet = width >= 768;
+    const isLandscape = width > height;
+    const isSmall = width < 360;
+
+    /* ── Logo ── */
+    // Tablet 400, handphone 80
+    // Tapi kalau tablet landscape (tinggi sempit), kecilkan proporsional
+    const logoSize = isTablet
+      ? Math.min(400, height * 0.45)
+      : Math.min(200, height * 0.50);
+
+    /* ── Text sizes ── */
+    // Scale proporsional dengan logo
+    const titleSize = isTablet ? 32 : isSmall ? 16 : 18;
+    const subtitleSize = isTablet ? 16 : isSmall ? 11 : 12;
+    const footerSize = isTablet ? 12 : isSmall ? 9 : 10;
+
+    /* ── Spacing ── */
+    // Semua di-scale naik untuk tablet karena logo jauh lebih besar
+    const textMarginTop = isTablet ? 40 : 20;
+    const dotsMarginTop = isTablet ? 64 : 36;
+    const footerBottom = isTablet ? 60 : 40;
+
+    /* ── Dot size ── */
+    const dotSize = isTablet ? 10 : 6;
+
+    /* ── Orb sizes ── */
+    // Tablet: orb lebih besar biar seimbang dengan logo
+    const orb1Size = isTablet
+      ? Math.min(width * 0.65, 650)
+      : Math.min(width * 0.7, 420);
+    const orb2Size = isTablet
+      ? Math.min(width * 0.7, 700)
+      : Math.min(width * 0.75, 450);
+    const orb3Size = isTablet
+      ? Math.min(width * 0.4, 400)
+      : Math.min(width * 0.4, 240);
+
+    return {
+      isTablet,
+      isLandscape,
+      isSmall,
+      logoSize,
+      titleSize,
+      subtitleSize,
+      footerSize,
+      textMarginTop,
+      dotsMarginTop,
+      footerBottom,
+      dotSize,
+      orb1Size,
+      orb2Size,
+      orb3Size,
+    };
+  }, [width, height]);
+}
+
+/* ══════════════════════════════════════════════════════
+   Loading Dots
    ══════════════════════════════════════════════════════ */
 function LoadingDots({
   active,
   reduceMotion,
+  size = 6,
 }: {
   active: string;
   reduceMotion: boolean;
+  size?: number;
 }) {
   const dots = [
     useRef(new Animated.Value(0)).current,
@@ -110,9 +173,9 @@ function LoadingDots({
         <Animated.View
           key={i}
           style={{
-            width: 6,
-            height: 6,
-            borderRadius: 3,
+            width: size,
+            height: size,
+            borderRadius: size / 2,
             backgroundColor: active,
             opacity: dot,
             transform: [
@@ -139,6 +202,10 @@ export function LoadingSplash() {
   const colors = THEME[theme];
   const reduceMotion = useReduceMotion();
 
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const sizes = useResponsiveSizes(SCREEN_W, SCREEN_H);
+
   /* ── Entrance animations ── */
   const logoScale = useRef(new Animated.Value(0.7)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
@@ -161,44 +228,42 @@ export function LoadingSplash() {
       return;
     }
 
-    // Entrance sequence: logo → text → dots
     Animated.sequence([
       Animated.parallel([
         Animated.timing(logoOpacity, {
           toValue: 1,
-          duration: 500,
+          duration: 450,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.spring(logoScale, {
           toValue: 1,
-          friction: 6,
-          tension: 80,
+          friction: 7,
+          tension: 100,
           useNativeDriver: true,
         }),
       ]),
       Animated.parallel([
         Animated.timing(textOpacity, {
           toValue: 1,
-          duration: 400,
+          duration: 350,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(textTranslate, {
           toValue: 0,
-          duration: 400,
+          duration: 350,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
       ]),
       Animated.timing(dotsOpacity, {
         toValue: 1,
-        duration: 300,
+        duration: 250,
         useNativeDriver: true,
       }),
     ]).start();
 
-    // Continuous floating orbs
     const float = (orb: Animated.Value, duration: number, distance: number) =>
       Animated.loop(
         Animated.sequence([
@@ -244,11 +309,11 @@ export function LoadingSplash() {
         pointerEvents="none"
         style={{
           position: 'absolute',
-          top: -SCREEN_H * 0.1,
+          top: -SCREEN_H * 0.08,
           right: -SCREEN_W * 0.15,
-          width: SCREEN_W * 0.7,
-          height: SCREEN_W * 0.7,
-          borderRadius: SCREEN_W * 0.35,
+          width: sizes.orb1Size,
+          height: sizes.orb1Size,
+          borderRadius: sizes.orb1Size / 2,
           backgroundColor: colors.orb1,
           transform: [{ translateY: orb1Y }],
         }}
@@ -259,9 +324,9 @@ export function LoadingSplash() {
           position: 'absolute',
           bottom: -SCREEN_H * 0.05,
           left: -SCREEN_W * 0.2,
-          width: SCREEN_W * 0.75,
-          height: SCREEN_W * 0.75,
-          borderRadius: SCREEN_W * 0.375,
+          width: sizes.orb2Size,
+          height: sizes.orb2Size,
+          borderRadius: sizes.orb2Size / 2,
           backgroundColor: colors.orb2,
           transform: [{ translateY: orb2Y }],
         }}
@@ -270,18 +335,24 @@ export function LoadingSplash() {
         pointerEvents="none"
         style={{
           position: 'absolute',
-          top: SCREEN_H * 0.4,
+          top: SCREEN_H * 0.42,
           left: SCREEN_W * 0.05,
-          width: SCREEN_W * 0.4,
-          height: SCREEN_W * 0.4,
-          borderRadius: SCREEN_W * 0.2,
+          width: sizes.orb3Size,
+          height: sizes.orb3Size,
+          borderRadius: sizes.orb3Size / 2,
           backgroundColor: colors.orb3,
           transform: [{ translateY: orb3Y }],
         }}
       />
 
       {/* ══ Center Content ══ */}
-      <View className="flex-1 items-center justify-center">
+      <View
+        className="flex-1 items-center justify-center px-6"
+        style={{
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+        }}
+      >
         {/* Logo dengan glow effect */}
         <Animated.View
           style={{
@@ -289,14 +360,21 @@ export function LoadingSplash() {
             transform: [{ scale: logoScale }],
             shadowColor: colors.logoShadow,
             shadowOpacity: 0.25,
-            shadowRadius: 24,
-            shadowOffset: { width: 0, height: 12 },
+            shadowRadius: sizes.isTablet ? 40 : 24,
+            shadowOffset: {
+              width: 0,
+              height: sizes.isTablet ? 20 : 12,
+            },
             elevation: 8,
           }}
         >
           <Image
             source={LOGO}
-            style={{ width: 96, height: 96, borderRadius: 24 }}
+            style={{
+              width: sizes.logoSize,
+              height: sizes.logoSize,
+              borderRadius: sizes.logoSize * 0.22,
+            }}
             resizeMode="contain"
           />
         </Animated.View>
@@ -306,21 +384,42 @@ export function LoadingSplash() {
           style={{
             opacity: textOpacity,
             transform: [{ translateY: textTranslate }],
-            marginTop: 20,
+            marginTop: sizes.textMarginTop,
             alignItems: 'center',
+            paddingHorizontal: 24,
           }}
         >
-          <Text className="font-dm-extrabold text-xl tracking-tight text-stone-900 dark:text-stone-50">
+          <Text
+            className="font-dm-extrabold tracking-tight text-stone-900 dark:text-stone-50"
+            style={{
+              fontSize: sizes.titleSize,
+              lineHeight: sizes.titleSize * 1.25,
+            }}
+          >
             Latea App
           </Text>
-          <Text className="mt-1 font-dm-regular text-xs text-stone-500 dark:text-stone-400">
+          <Text
+            className="text-center font-dm-regular text-stone-500 dark:text-stone-400"
+            style={{
+              fontSize: sizes.subtitleSize,
+              lineHeight: sizes.subtitleSize * 1.4,
+              marginTop: 6,
+            }}
+            numberOfLines={1}
+          >
             Point of Sale Information System
           </Text>
         </Animated.View>
 
         {/* Loading dots */}
-        <Animated.View style={{ opacity: dotsOpacity, marginTop: 40 }}>
-          <LoadingDots active={colors.dotActive} reduceMotion={reduceMotion} />
+        <Animated.View
+          style={{ opacity: dotsOpacity, marginTop: sizes.dotsMarginTop }}
+        >
+          <LoadingDots
+            active={colors.dotActive}
+            reduceMotion={reduceMotion}
+            size={sizes.dotSize}
+          />
         </Animated.View>
       </View>
 
@@ -329,13 +428,18 @@ export function LoadingSplash() {
         style={{
           opacity: dotsOpacity,
           position: 'absolute',
-          bottom: 40,
+          bottom: Math.max(insets.bottom, 16) + sizes.footerBottom - 40,
           left: 0,
           right: 0,
           alignItems: 'center',
+          paddingHorizontal: 24,
         }}
       >
-        <Text className="font-dm-regular text-[10px] uppercase tracking-widest text-stone-400 dark:text-stone-500">
+        <Text
+          className="text-center font-dm-regular uppercase tracking-widest text-stone-400 dark:text-stone-500"
+          style={{ fontSize: sizes.footerSize }}
+          numberOfLines={1}
+        >
           PP. Annuqayah Latee
         </Text>
       </Animated.View>

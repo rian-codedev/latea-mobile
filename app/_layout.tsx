@@ -51,28 +51,30 @@ function RootNavigator() {
   const { isFirstLaunch } = useFirstLaunch();
   const [appReady, setAppReady] = useState(false);
 
+  // ⭐ Hide native splash + tunggu minimum 1300ms supaya animasi selesai
   useEffect(() => {
     if (fontsLoaded && isFirstLaunch !== null) {
       SplashScreen.hideAsync();
-      setTimeout(() => setAppReady(true), 300);
+      const timer = setTimeout(() => setAppReady(true), 1300);
+      return () => clearTimeout(timer);
     }
   }, [fontsLoaded, isFirstLaunch]);
 
+  // Redirect ke onboarding kalau first install
   useEffect(() => {
     if (appReady && isFirstLaunch === true) {
       router.replace('/(onboarding)' as any);
     }
   }, [appReady, isFirstLaunch]);
 
-  if (!fontsLoaded || isFirstLaunch === null) {
+  // ⭐ GATE dengan appReady — jangan unmount splash sampai animasi selesai
+  if (!fontsLoaded || isFirstLaunch === null || !appReady) {
     return <LoadingSplash />;
   }
 
   return (
     <>
-      {/* ⭐ StatusBar DI LUAR ThemeProvider & Stack */}
       <StatusBar style={isDark ? 'light' : 'dark'} />
-
       <ThemeProvider value={isDark ? NAV_THEME.dark : NAV_THEME.light}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(onboarding)" />

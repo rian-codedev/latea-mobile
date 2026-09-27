@@ -42,7 +42,7 @@ import { useColorScheme } from 'nativewind';
 /* ── Konfigurasi ── */
 const APP_NAME = 'Latea App';
 const APP_TAGLINE = 'Annuqayah Latee';
-const LOGO = require('@/assets/images/icon.png');
+const LOGO = require('@/assets/images/logo.png');
 
 const HOME_ROUTE = '/(app)';
 

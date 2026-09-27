@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo, memo } from 'react';
 import {
   View,
   Pressable,
@@ -16,7 +16,6 @@ import { Icon } from '@/components/ui/icon';
 import { ArrowRight, ArrowLeft } from 'lucide-react-native';
 import { useFirstLaunch } from '@/lib/use-first-launch';
 
-// ⭐ Import 3 ilustrasi berbeda
 import Illustration1 from '@/assets/illustrations/onboarding-1.svg';
 import Illustration2 from '@/assets/illustrations/onboarding-2.svg';
 import Illustration3 from '@/assets/illustrations/onboarding-3.svg';
@@ -42,44 +41,36 @@ const SLIDES = [
   },
 ] as const;
 
-// Gradasi lembut untuk latar (light mode)
-const GRADIENTS = [
-  ['#FBF3E3', '#FDFBF5', '#EFF5EF'],
-  ['#EFF3EC', '#FAFAF6', '#EAF1F4'],
-  ['#EDF2F4', '#FBFAF6', '#F1F0E9'],
-] as const;
+/* ══════════════════════════════════════════════════════
+   Theme Tokens
+   ══════════════════════════════════════════════════════ */
+type Theme = 'light' | 'dark';
 
-// ⭐ Gradasi gelap untuk dark mode
-const GRADIENTS_DARK = [
-  ['#1A1612', '#0F0E0B', '#0D1410'],
-  ['#111510', '#0A0B08', '#0C1216'],
-  ['#0F1416', '#0B0A08', '#14120D'],
-] as const;
-
-const CARD_SHADOW = {
-  backgroundColor: '#FFFFFF',
-  borderRadius: 28,
-  shadowColor: '#0F172A',
-  shadowOpacity: 0.1,
-  shadowRadius: 28,
-  shadowOffset: { width: 0, height: 14 },
-  elevation: 12,
-} as const;
-
-const CARD_SHADOW_DARK = {
-  backgroundColor: '#1C1917',
-  borderRadius: 28,
-  shadowColor: '#000000',
-  shadowOpacity: 0.5,
-  shadowRadius: 28,
-  shadowOffset: { width: 0, height: 14 },
-  elevation: 12,
+const THEME = {
+  light: {
+    gradient: ['#F9E4BC', '#FEF9ED', '#F5FAF5'] as const,
+    orb1: 'rgba(132,169,140,0.18)',
+    orb2: 'rgba(249,228,188,0.30)',
+    orb3: 'rgba(200,220,205,0.15)',
+    cardShadow: '#0F172A',
+    cardShadowOpacity: 0.1,
+    cardBg: '#FFFFFF',
+  },
+  dark: {
+    gradient: ['#1A1612', '#0F0E0B', '#0D1410'] as const,
+    orb1: 'rgba(132,169,140,0.10)',
+    orb2: 'rgba(200,180,120,0.06)',
+    orb3: 'rgba(132,169,140,0.05)',
+    cardShadow: '#000000',
+    cardShadowOpacity: 0.5,
+    cardBg: '#1C1917',
+  },
 } as const;
 
 const LOGIN_ROUTE = '/(auth)/login' as any;
 
 /* ══════════════════════════════════════════════════════
-   Hook: hormati pengaturan "Kurangi gerakan"
+   Hooks
    ══════════════════════════════════════════════════════ */
 function useReduceMotion() {
   const [reduce, setReduce] = useState(false);
@@ -94,7 +85,6 @@ function useReduceMotion() {
   return reduce;
 }
 
-/* ── Masuk sekali: fade + geser naik ── */
 function useEntrance(reduce: boolean, distance = 18) {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -125,63 +115,217 @@ function useEntrance(reduce: boolean, distance = 18) {
   };
 }
 
+/* ⭐ Memoized illustration — tidak re-render saat state lain berubah */
+const MemoIllustration = memo(
+  function MemoIllustration({
+    Component,
+    size,
+  }: {
+    Component: React.ComponentType<any>;
+    size: number;
+  }) {
+    return (
+      <View
+        style={{ width: size, height: size }}
+        className="items-center justify-center"
+      >
+        <Component
+          width="100%"
+          height="100%"
+          preserveAspectRatio="xMidYMid meet"
+        />
+      </View>
+    );
+  },
+  (prev, next) => prev.Component === next.Component && prev.size === next.size
+);
+
 /* ══════════════════════════════════════════════════════
    Main Screen
    ══════════════════════════════════════════════════════ */
 export default function OnboardingScreen() {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { markLaunched } = useFirstLaunch();
   const reduceMotion = useReduceMotion();
 
-  // ⭐ Theme awareness
   const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const theme: Theme = colorScheme === 'dark' ? 'dark' : 'light';
+  const colors = THEME[theme];
+  const isDark = theme === 'dark';
 
   const isTablet = width >= 768;
+  const SCREEN_W = width;
+  const SCREEN_H = height;
 
   const [idx, setIdx] = useState(0);
   const [renderIdx, setRenderIdx] = useState(0);
   const isLast = idx === SLIDES.length - 1;
   const direction = useRef(1);
+  const isAnimating = useRef(false);
 
-  // Transisi konten antar slide
-  const progress = useRef(new Animated.Value(1)).current;
-  const gradientFade = useRef(new Animated.Value(1)).current;
+  /* ⭐ Animation values — dipisah agar tidak konflik */
+  const contentOpacity = useRef(new Animated.Value(1)).current;
+  const contentTranslateX = useRef(new Animated.Value(0)).current;
 
-  // Card masuk sekali saat layar dibuka
   const cardEntrance = useEntrance(reduceMotion, 24);
 
-  // ⭐ Ambil gradient & shadow sesuai tema
-  const gradients = isDark ? GRADIENTS_DARK : GRADIENTS;
-  const cardShadow = isDark ? CARD_SHADOW_DARK : CARD_SHADOW;
+  /* Orbs */
+  const orb1Y = useRef(new Animated.Value(0)).current;
+  const orb2Y = useRef(new Animated.Value(0)).current;
+  const orb3Y = useRef(new Animated.Value(0)).current;
 
+  /* Illustration float */
+  const illustrationFloat = useRef(new Animated.Value(0)).current;
+
+  /* Back button fade */
+  const backButtonFade = useRef(new Animated.Value(0)).current;
+
+  const orbSizes = useMemo(() => {
+    return {
+      orb1: isTablet
+        ? Math.min(width * 0.65, 650)
+        : Math.min(width * 0.7, 420),
+      orb2: isTablet
+        ? Math.min(width * 0.7, 700)
+        : Math.min(width * 0.75, 450),
+      orb3: isTablet
+        ? Math.min(width * 0.4, 400)
+        : Math.min(width * 0.4, 240),
+    };
+  }, [width, isTablet]);
+
+  /* ── Floating animations ── */
+  useEffect(() => {
+    if (reduceMotion) return;
+
+    const float = (orb: Animated.Value, duration: number, distance: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(orb, {
+            toValue: distance,
+            duration,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(orb, {
+            toValue: -distance,
+            duration,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+
+    const o1 = float(orb1Y, 3500, 12);
+    const o2 = float(orb2Y, 4200, -15);
+    const o3 = float(orb3Y, 3000, 8);
+
+    const illus = Animated.loop(
+      Animated.sequence([
+        Animated.timing(illustrationFloat, {
+          toValue: 1,
+          duration: 2400,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(illustrationFloat, {
+          toValue: 0,
+          duration: 2400,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    o1.start();
+    o2.start();
+    o3.start();
+    illus.start();
+
+    return () => {
+      o1.stop();
+      o2.stop();
+      o3.stop();
+      illus.stop();
+    };
+  }, [reduceMotion]);
+
+  /* ── Back button fade ── */
+  useEffect(() => {
+    if (reduceMotion) {
+      backButtonFade.setValue(idx > 0 ? 1 : 0);
+      return;
+    }
+    Animated.timing(backButtonFade, {
+      toValue: idx > 0 ? 1 : 0,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [idx, reduceMotion]);
+
+  /* ⭐ Transition — fade OUT → change content → fade IN */
   function goTo(next: number) {
+    if (isAnimating.current) return;
     if (next === idx || next < 0 || next > SLIDES.length - 1) return;
-    direction.current = next > idx ? 1 : -1;
-    setIdx(next);
+
+    const dir = next > idx ? 1 : -1;
+    direction.current = dir;
 
     if (reduceMotion) {
+      setIdx(next);
       setRenderIdx(next);
       return;
     }
 
-    progress.setValue(0);
-    gradientFade.setValue(0);
+    isAnimating.current = true;
+
+    // 1. Exit — slide & fade out ke arah berlawanan
     Animated.parallel([
-      Animated.timing(progress, {
-        toValue: 1,
-        duration: 420,
-        easing: Easing.out(Easing.cubic),
+      Animated.timing(contentOpacity, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.in(Easing.quad),
         useNativeDriver: true,
       }),
-      Animated.timing(gradientFade, {
-        toValue: 1,
-        duration: 600,
+      Animated.timing(contentTranslateX, {
+        toValue: -30 * dir, // geser keluar ke kiri jika next
+        duration: 180,
+        easing: Easing.in(Easing.quad),
         useNativeDriver: true,
       }),
-    ]).start();
-    setRenderIdx(next);
+    ]).start(({ finished }) => {
+      if (!finished) {
+        isAnimating.current = false;
+        return;
+      }
+
+      // 2. Update content setelah fade out
+      setIdx(next);
+      setRenderIdx(next);
+
+      // 3. Prep entry — dari sisi berlawanan
+      contentTranslateX.setValue(30 * dir);
+
+      // 4. Enter — slide & fade in
+      Animated.parallel([
+        Animated.timing(contentOpacity, {
+          toValue: 1,
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(contentTranslateX, {
+          toValue: 0,
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        isAnimating.current = false;
+      });
+    });
   }
 
   async function finish() {
@@ -197,15 +341,22 @@ export default function OnboardingScreen() {
     }
   }
 
+  /* ⭐ Content style */
   const contentStyle = reduceMotion
     ? undefined
     : {
-        opacity: progress,
+        opacity: contentOpacity,
+        transform: [{ translateX: contentTranslateX }],
+      };
+
+  const illustrationFloatStyle = reduceMotion
+    ? undefined
+    : {
         transform: [
           {
-            translateX: progress.interpolate({
+            translateY: illustrationFloat.interpolate({
               inputRange: [0, 1],
-              outputRange: [22 * direction.current, 0],
+              outputRange: [0, -10],
             }),
           },
         ],
@@ -214,32 +365,60 @@ export default function OnboardingScreen() {
   const shownSlide = SLIDES[renderIdx];
   const Illustration = shownSlide.illustration;
 
-  /* Ukuran ilustrasi responsif */
   const illustrationSize = isTablet ? 280 : 200;
 
   return (
     <View className="flex-1 bg-white dark:bg-stone-950">
-      {/* ── Latar gradasi, berganti halus per slide ── */}
+      {/* ⭐ Gradient — HANYA SATU layer (yang kedua mubazir) */}
       <View className="absolute inset-0">
         <LinearGradient
-          colors={[...gradients[renderIdx]]}
+          colors={[...colors.gradient]}
           start={{ x: 0, y: 0 }}
-          end={{ x: 0.6, y: 1 }}
+          end={{ x: 0.5, y: 1 }}
           style={{ flex: 1 }}
         />
       </View>
+
+      {/* Orbs */}
       <Animated.View
-        className="absolute inset-0"
-        style={{ opacity: gradientFade }}
         pointerEvents="none"
-      >
-        <LinearGradient
-          colors={[...gradients[idx]]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0.6, y: 1 }}
-          style={{ flex: 1 }}
-        />
-      </Animated.View>
+        style={{
+          position: 'absolute',
+          top: -SCREEN_H * 0.08,
+          right: -SCREEN_W * 0.15,
+          width: orbSizes.orb1,
+          height: orbSizes.orb1,
+          borderRadius: orbSizes.orb1 / 2,
+          backgroundColor: colors.orb1,
+          transform: [{ translateY: orb1Y }],
+        }}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          bottom: -SCREEN_H * 0.05,
+          left: -SCREEN_W * 0.2,
+          width: orbSizes.orb2,
+          height: orbSizes.orb2,
+          borderRadius: orbSizes.orb2 / 2,
+          backgroundColor: colors.orb2,
+          transform: [{ translateY: orb2Y }],
+        }}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: SCREEN_H * 0.42,
+          left: SCREEN_W * 0.05,
+          width: orbSizes.orb3,
+          height: orbSizes.orb3,
+          borderRadius: orbSizes.orb3 / 2,
+          backgroundColor: colors.orb3,
+          transform: [{ translateY: orb3Y }],
+        }}
+      />
 
       <View
         className="flex-1 items-center justify-center px-6"
@@ -248,7 +427,7 @@ export default function OnboardingScreen() {
           paddingBottom: insets.bottom + 20,
         }}
       >
-        {/* ── Skip, di luar card, kanan atas ── */}
+        {/* Lewati */}
         <View
           className="absolute right-6 z-10"
           style={{ top: insets.top + 16 }}
@@ -260,37 +439,80 @@ export default function OnboardingScreen() {
           </Pressable>
         </View>
 
-        {/* ── Card ── */}
+        {/* Card */}
         <Animated.View
           style={[
-            cardShadow,
+            {
+              backgroundColor: colors.cardBg,
+              borderRadius: 28,
+              shadowColor: colors.cardShadow,
+              shadowOpacity: colors.cardShadowOpacity,
+              shadowRadius: 28,
+              shadowOffset: { width: 0, height: 14 },
+              elevation: 12,
+            },
             { width: '100%', maxWidth: isTablet ? 560 : 420 },
             cardEntrance,
           ]}
-          className="border border-border/40 dark:border-stone-800/60"
+          className="relative border border-border/40 dark:border-stone-800/60"
         >
+          {/* Tombol kembali */}
+          <Animated.View
+            style={{
+              position: 'absolute',
+              top: isTablet ? 20 : 14,
+              left: isTablet ? 20 : 14,
+              zIndex: 10,
+              opacity: backButtonFade,
+              transform: [
+                {
+                  translateX: backButtonFade.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-8, 0],
+                  }),
+                },
+              ],
+            }}
+            pointerEvents={idx > 0 ? 'auto' : 'none'}
+          >
+            <Pressable
+              onPress={() => goTo(idx - 1)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Kembali ke slide sebelumnya"
+              className="size-8 items-center justify-center rounded-full active:bg-muted/50 dark:active:bg-stone-800/50"
+            >
+              <Icon
+                as={ArrowLeft}
+                size={16}
+                className="text-muted-foreground dark:text-stone-400"
+              />
+            </Pressable>
+          </Animated.View>
+
           <View
             className={isTablet ? 'gap-8 px-12 py-12' : 'gap-6 px-6 py-8'}
           >
-            {/* ── Konten slide ── */}
+            {/* ⭐ Konten slide — dengan minHeight biar tidak shift */}
             <Animated.View
-              style={contentStyle}
-              className="items-center gap-6"
+              style={[
+                contentStyle,
+                {
+                  minHeight: isTablet ? 420 : 340,
+                },
+              ]}
+              className="items-center justify-center gap-6"
             >
-              {/* ⭐ Ilustrasi SVG per slide */}
-              <View
-                style={{
-                  width: illustrationSize,
-                  height: illustrationSize,
-                }}
+              {/* Ilustrasi mengambang */}
+              <Animated.View
+                style={illustrationFloatStyle}
                 className="items-center justify-center"
               >
-                <Illustration
-                  width="100%"
-                  height="100%"
-                  preserveAspectRatio="xMidYMid meet"
+                <MemoIllustration
+                  Component={Illustration}
+                  size={illustrationSize}
                 />
-              </View>
+              </Animated.View>
 
               {/* Title + Body */}
               <View className="items-center gap-2.5">
@@ -301,19 +523,29 @@ export default function OnboardingScreen() {
                 >
                   {shownSlide.title}
                 </Text>
-                <Text
-                  className={`text-center font-dm-regular leading-6 text-muted-foreground dark:text-stone-400 ${
-                    isTablet
-                      ? 'max-w-[380px] text-base'
-                      : 'max-w-[280px] text-sm'
-                  }`}
+
+                <View
+                  style={{
+                    minHeight: 72,
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                  }}
                 >
-                  {shownSlide.body}
-                </Text>
+                  <Text
+                    className={`text-center font-dm-regular leading-6 text-muted-foreground dark:text-stone-400 ${
+                      isTablet
+                        ? 'max-w-[380px] text-base'
+                        : 'max-w-[280px] text-sm'
+                    }`}
+                    numberOfLines={3}
+                  >
+                    {shownSlide.body}
+                  </Text>
+                </View>
               </View>
             </Animated.View>
 
-            {/* ── Dots ── */}
+            {/* Dots */}
             <View className="flex-row justify-center gap-2">
               {SLIDES.map((_, i) => (
                 <Pressable
@@ -334,29 +566,12 @@ export default function OnboardingScreen() {
               ))}
             </View>
 
-            {/* ── Tombol ── */}
-            <View className="items-center gap-3">
+            {/* Tombol Next */}
+            <View className="items-center">
               <NextButton
                 label={isLast ? 'Mulai Sekarang' : 'Lanjut'}
                 onPress={handleNext}
               />
-
-              {idx > 0 ? (
-                <Pressable
-                  onPress={() => goTo(idx - 1)}
-                  hitSlop={10}
-                  className="flex-row items-center gap-1 px-2 py-1"
-                >
-                  <Icon
-                    as={ArrowLeft}
-                    size={13}
-                    className="text-muted-foreground dark:text-stone-400"
-                  />
-                  <Text className="font-dm-medium text-xs text-muted-foreground dark:text-stone-400">
-                    Kembali
-                  </Text>
-                </Pressable>
-              ) : null}
             </View>
           </View>
         </Animated.View>
@@ -366,7 +581,7 @@ export default function OnboardingScreen() {
 }
 
 /* ══════════════════════════════════════════════════════
-   Next Button — pill di tengah
+   Next Button
    ══════════════════════════════════════════════════════ */
 function NextButton({
   label,
