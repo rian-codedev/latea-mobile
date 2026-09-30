@@ -73,9 +73,19 @@ export async function fetchSales(params?: {
   return res.data;
 }
 
-export async function fetchSaleDetail(id: number): Promise<Sale> {
-  const res = await api.get<{ data: Sale }>(`/sales/${id}`);
-  return res.data.data;
+export async function fetchSaleDetail(saleId: number): Promise<Sale> {
+  console.log('[fetchSaleDetail] Requesting sale ID:', saleId);
+  
+  try {
+    const res = await api.get(`/sales/${saleId}`);
+    console.log('[fetchSaleDetail] Success:', res.data);
+    return res.data.data;
+  } catch (e: any) {
+    console.log('[fetchSaleDetail] Error status:', e.response?.status);
+    console.log('[fetchSaleDetail] Error data:', e.response?.data);
+    console.log('[fetchSaleDetail] Error headers:', e.response?.headers);
+    throw e;
+  }
 }
 
 export async function fetchProductSummary(params: {
@@ -87,4 +97,19 @@ export async function fetchProductSummary(params: {
     { params }
   );
   return res.data.data;
+}
+
+export async function updateSale(
+  saleId: number,
+  payload: {
+    items: { product_id: number; quantity: number }[];
+    payment_amount: number;
+  }
+): Promise<Sale> {
+  const res = await api.put(`/sales/${saleId}`, payload);
+  return res.data.data;
+}
+
+export async function deleteSale(saleId: number): Promise<void> {
+  await api.delete(`/sales/${saleId}`);
 }

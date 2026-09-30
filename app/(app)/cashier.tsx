@@ -16,8 +16,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { useColorScheme } from 'nativewind';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import {
@@ -33,7 +34,12 @@ import {
   Check,
 } from 'lucide-react-native';
 import { useProducts } from '@/lib/useProduct';
-import { createSale, type Sale } from '@/lib/api-sales';
+import {
+  fetchSaleDetail,
+  createSale,
+  updateSale,
+  type Sale,
+} from '@/lib/api-sales';
 import { getErrorMessage } from '@/lib/api';
 import type { ApiProduct } from '@/lib/api-products';
 import {
@@ -44,9 +50,10 @@ import {
 } from '@/lib/cart';
 import { formatRupiah } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { useColorScheme } from 'nativewind';
 
-/* ── Konstanta ── */
+/* ══════════════════════════════════════════════════════
+   Konstanta
+   ══════════════════════════════════════════════════════ */
 const HEADER_HEIGHT = 60;
 const CARD_HEIGHT = 188;
 const IMAGE_HEIGHT = 104;
@@ -73,10 +80,13 @@ export default function CashierScreen() {
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
+
   const [search, setSearch] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [isLoadingEdit, setIsLoadingEdit] = useState(false);
+
   const { user } = useSession();
   const {
     data: apiProducts = [],
@@ -84,15 +94,92 @@ export default function CashierScreen() {
     error,
     refetch,
   } = useProducts(user?.store_id);
+
   const isTablet = width >= 768;
   const isLandscape = width > 900;
   const cols = isLandscape ? 4 : isTablet ? 3 : 2;
 
+  const params = useLocalSearchParams<{ editSaleId?: string }>();
+  const editSaleId = params.editSaleId ? Number(params.editSaleId) : null;
+  const isEditMode = !!editSaleId;
+
+  const setCart = useCart((s) => s.setItems);
+  const clearCart = useCart((s) => s.clear);
   const addItem = useCart((s) => s.addItem);
   const items = useCart((s) => s.items);
 
   const { total } = calcTotals(items);
   const itemCount = items.reduce((a, i) => a + i.quantity, 0);
+  const [editSale, setEditSale] = useState<Sale | null>(null);
+
+  /* ⭐ Preload cart saat edit mode */
+  /* ⭐ TAHAP 1: Fetch sale detail */
+  useEffect(() => {
+    if (!editSaleId) {
+      setEditSale(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingEdit(true);
+
+    fetchSaleDetail(editSaleId)
+      .then((sale) => {
+        if (cancelled) return;
+        setEditSale(sale);
+      })
+      .catch((e) => {
+        console.warn('[Cashier] Load edit failed:', e);
+        if (!cancelled) router.back();
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingEdit(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editSaleId]);
+
+  /* ⭐ TAHAP 2: Enrich cart saat editSale DAN apiProducts siap */
+  useEffect(() => {
+    if (!editSale) return;
+    if (apiProducts.length === 0) return;
+
+    clearCart();
+
+    const cartItems: CartItem[] = editSale.items.map((it) => {
+      // ⭐ Cast ke Number — hindari string vs int mismatch
+      const productId = Number(it.product_id);
+      const product = apiProducts.find((p) => Number(p.id) === productId);
+
+      // ⭐ Debug log
+      if (__DEV__) {
+        console.log('[Enrich]', {
+          raw_product_id: it.product_id,
+          raw_type: typeof it.product_id,
+          casted: productId,
+          found: !!product,
+          product_image_url: product?.image_url,
+          final_url: product?.image_url ?? null,
+        });
+      }
+
+      return {
+        productId: productId,
+        name: it.product_name,
+        code: it.product_code ?? product?.code ?? '',
+        emoji: product?.emoji ?? '📦',
+        imageUrl: product?.image_url ?? null,
+        price: it.price,
+        discountPrice: it.discount_price ?? product?.discount_price ?? null,
+        minimalDiscount: product?.minimal_discount ?? null,
+        quantity: it.quantity,
+      };
+    });
+
+    setCart(cartItems);
+  }, [editSale, apiProducts, setCart, clearCart]);
 
   const showSuccess = useCallback((message: string) => {
     setSuccessToast(message);
@@ -147,6 +234,25 @@ export default function CashierScreen() {
     setCartOpen(false);
     setCheckoutOpen(true);
   }
+
+  /* ⭐ Handler sukses submit */
+  const handleSubmitSuccess = useCallback(
+    (sale: Sale) => {
+      setCheckoutOpen(false);
+      showSuccess(
+        isEditMode
+          ? `Transaksi ${sale.invoice_number} berhasil diperbarui`
+          : `Transaksi ${sale.invoice_number} berhasil`
+      );
+      // ⭐ Edit mode → kembali ke dashboard setelah 1.2 detik
+      if (isEditMode) {
+        setTimeout(() => {
+          router.replace('/(app)');
+        }, 1200);
+      }
+    },
+    [isEditMode, showSuccess]
+  );
 
   return (
     <View className="flex-1 bg-white dark:bg-stone-950">
@@ -268,7 +374,10 @@ export default function CashierScreen() {
         {/* ═══ KANAN: Keranjang (tablet) ═══ */}
         {isTablet ? (
           <View className="flex-[3] bg-white dark:bg-stone-950">
-            <CartPanel bottomInset={insets.bottom} onCheckout={openCheckout} />
+            <CartPanel
+              bottomInset={insets.bottom}
+              onCheckout={openCheckout}
+            />
           </View>
         ) : null}
       </View>
@@ -307,10 +416,12 @@ export default function CashierScreen() {
 
           <View className="flex-1">
             <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
-              Kasir
+              {isEditMode ? 'Edit Transaksi' : 'Kasir'}
             </Text>
             <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-              Tap produk untuk menambah ke keranjang
+              {isEditMode
+                ? 'Ubah item atau jumlah, lalu simpan'
+                : 'Tap produk untuk menambah ke keranjang'}
             </Text>
           </View>
         </View>
@@ -384,7 +495,10 @@ export default function CashierScreen() {
           onRequestClose={() => setCartOpen(false)}
         >
           <View className="flex-1 justify-end bg-black/40">
-            <Pressable className="flex-1" onPress={() => setCartOpen(false)} />
+            <Pressable
+              className="flex-1"
+              onPress={() => setCartOpen(false)}
+            />
             <View
               className="overflow-hidden rounded-t-3xl bg-white dark:bg-stone-950"
               style={{ height: '78%' }}
@@ -407,16 +521,31 @@ export default function CashierScreen() {
         visible={checkoutOpen}
         onClose={() => setCheckoutOpen(false)}
         bottomInset={insets.bottom}
-        onSuccess={(sale) => {
-          setCheckoutOpen(false);
-          showSuccess(`Transaksi ${sale.invoice_number} berhasil`);
-        }}
+        onSuccess={handleSubmitSuccess}
+        editSaleId={editSaleId}
+        isEditMode={isEditMode}
       />
+
+      {/* ⭐ Loading overlay saat preload edit */}
+      {isLoadingEdit ? (
+        <View
+          style={StyleSheet.absoluteFill}
+          className="z-50 items-center justify-center bg-white/80 dark:bg-stone-950/80"
+          pointerEvents="auto"
+        >
+          <View className="items-center gap-3 rounded-2xl border border-border/40 bg-white p-6 dark:border-stone-800/60 dark:bg-stone-900">
+            <ActivityIndicator size="large" />
+            <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
+              Memuat data transaksi...
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
       {/* ══ SUCCESS TOAST ══ */}
       {successToast ? (
         <View
-          className="absolute right-5 z-50"
+          className="absolute right-5 z-[60]"
           style={{
             top: insets.top + HEADER_HEIGHT + 30,
             shadowColor: '#000',
@@ -473,8 +602,8 @@ function ProductButton({
         transform: [{ scale: pressed ? 0.97 : 1 }],
       })}
       className={`flex-1 overflow-hidden rounded-2xl border-[1.5px] bg-white dark:bg-stone-900 ${inCart
-        ? 'border-primary dark:border-sage-500'
-        : 'border-border/40 dark:border-stone-800/60'
+          ? 'border-primary dark:border-sage-500'
+          : 'border-border/40 dark:border-stone-800/60'
         }`}
     >
       <View
@@ -813,14 +942,31 @@ function CartRow({
    Checkout Modal
    ══════════════════════════════════════════════════════ */
 function quickAmounts(total: number): number[] {
-  const roundTo = (n: number, mult: number) => Math.ceil(n / mult) * mult;
-  return [
-    total,
-    roundTo(total, 5000),
-    roundTo(total, 10000),
-    roundTo(total, 50000),
-    roundTo(total, 100000),
-  ].filter((v, i, arr) => arr.indexOf(v) === i);
+  const CASH_DENOMS = [
+    1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000,
+  ];
+
+  const result: number[] = [total];
+
+  for (const denom of CASH_DENOMS) {
+    if (denom > total && !result.includes(denom)) {
+      result.push(denom);
+      if (result.length >= 5) break;
+    }
+  }
+
+  if (result.length < 5) {
+    const fallbackMults = [5000, 10000, 50000, 100000, 500000];
+    for (const m of fallbackMults) {
+      const rounded = Math.ceil(total / m) * m;
+      if (rounded > total && !result.includes(rounded)) {
+        result.push(rounded);
+        if (result.length >= 5) break;
+      }
+    }
+  }
+
+  return result.sort((a, b) => a - b).slice(0, 5);
 }
 
 function CheckoutModal({
@@ -828,11 +974,15 @@ function CheckoutModal({
   onClose,
   bottomInset,
   onSuccess,
+  editSaleId,
+  isEditMode,
 }: {
   visible: boolean;
   onClose: () => void;
   bottomInset: number;
   onSuccess: (sale: Sale) => void;
+  editSaleId: number | null;
+  isEditMode: boolean;
 }) {
   const queryClient = useQueryClient();
   const items = useCart((s) => s.items);
@@ -871,13 +1021,20 @@ function CheckoutModal({
     setError(null);
     setIsSubmitting(true);
     try {
-      const sale = await createSale({
+      const payload = {
         items: items.map((i) => ({
           product_id: i.productId,
           quantity: i.quantity,
         })),
         payment_amount: paymentNum,
-      });
+      };
+
+      // ⭐ Switch: create vs update
+      const sale =
+        isEditMode && editSaleId
+          ? await updateSale(editSaleId, payload)
+          : await createSale(payload);
+
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       clear();
       onSuccess(sale);
@@ -902,21 +1059,19 @@ function CheckoutModal({
           className="w-full items-center"
         >
           <View
-            style={{
-              width: '100%',
-              maxWidth: 460,
-              maxHeight: '100%',
-            }}
+            style={{ width: '100%', maxWidth: 460, maxHeight: '100%' }}
             className="overflow-hidden rounded-3xl bg-white dark:bg-stone-900"
           >
             {/* Header */}
             <View className="flex-row items-center justify-between border-b border-border/40 px-5 py-3.5 dark:border-stone-800/60">
               <View>
                 <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
-                  Pembayaran
+                  {isEditMode ? 'Update Pembayaran' : 'Pembayaran'}
                 </Text>
                 <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-                  Masukkan uang yang diterima
+                  {isEditMode
+                    ? 'Konfirmasi perubahan transaksi'
+                    : 'Masukkan uang yang diterima'}
                 </Text>
               </View>
               <Pressable
@@ -1055,7 +1210,7 @@ function CheckoutModal({
                   />
                 </View>
 
-                <View className="flex-row flex-wrap gap-2 justify-evenly">
+                <View className="flex-row flex-wrap justify-evenly gap-2">
                   {quick.map((amount) => {
                     const isExact = amount === total;
                     const active = paymentNum === amount;
@@ -1069,14 +1224,14 @@ function CheckoutModal({
                         }}
                         disabled={isSubmitting}
                         className={`h-9 min-w-[80px] items-center justify-center rounded-full border active:opacity-80 ${active
-                          ? 'border-primary bg-primary dark:border-sage-500 dark:bg-sage-500'
-                          : 'border-border/60 bg-white dark:border-stone-700/60 dark:bg-stone-900'
+                            ? 'border-primary bg-primary dark:border-sage-500 dark:bg-sage-500'
+                            : 'border-border/60 bg-white dark:border-stone-700/60 dark:bg-stone-900'
                           }`}
                       >
                         <Text
                           className={`font-dm-bold text-xs ${active
-                            ? 'text-primary-foreground'
-                            : 'text-foreground dark:text-stone-50'
+                              ? 'text-primary-foreground'
+                              : 'text-foreground dark:text-stone-50'
                             }`}
                           numberOfLines={1}
                         >
@@ -1091,23 +1246,23 @@ function CheckoutModal({
               {/* Kembalian */}
               <View
                 className={`overflow-hidden rounded-2xl border ${change >= 0
-                  ? 'border-primary/30 bg-primary/5 dark:border-sage-500/30 dark:bg-sage-500/10'
-                  : 'border-destructive/30 bg-destructive/5 dark:border-red-500/30 dark:bg-red-500/10'
+                    ? 'border-primary/30 bg-primary/5 dark:border-sage-500/30 dark:bg-sage-500/10'
+                    : 'border-destructive/30 bg-destructive/5 dark:border-red-500/30 dark:bg-red-500/10'
                   }`}
               >
                 <View className="flex-row items-center justify-between px-4 py-3.5">
                   <Text
                     className={`font-dm-semibold text-sm ${change >= 0
-                      ? 'text-foreground dark:text-stone-50'
-                      : 'text-destructive dark:text-red-400'
+                        ? 'text-foreground dark:text-stone-50'
+                        : 'text-destructive dark:text-red-400'
                       }`}
                   >
                     {change >= 0 ? 'Kembalian' : 'Kurang'}
                   </Text>
                   <Text
                     className={`font-dm-extrabold text-xl leading-none tracking-tight ${change >= 0
-                      ? 'text-primary dark:text-sage-400'
-                      : 'text-destructive dark:text-red-400'
+                        ? 'text-primary dark:text-sage-400'
+                        : 'text-destructive dark:text-red-400'
                       }`}
                   >
                     {formatRupiah(Math.abs(change))}
@@ -1141,8 +1296,8 @@ function CheckoutModal({
                 {isSubmitting ? (
                   <>
                     <ActivityIndicator size="small" color="#FFFFFF" />
-                    <Text className="font-dm-bold text-sm text-primary-foreground dark:text-zinc-300">
-                      Memproses...
+                    <Text className="font-dm-bold text-sm text-primary-foreground">
+                      {isEditMode ? 'Menyimpan...' : 'Memproses...'}
                     </Text>
                   </>
                 ) : (
@@ -1163,7 +1318,7 @@ function CheckoutModal({
                           : 'font-dm-bold text-sm text-muted-foreground dark:text-stone-500'
                       }
                     >
-                      Selesai &amp; Bayar
+                      {isEditMode ? 'Simpan Perubahan' : 'Selesai & Bayar'}
                     </Text>
                   </>
                 )}

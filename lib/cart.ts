@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 
+/* ══════════════════════════════════════════════════════
+   Types
+   ══════════════════════════════════════════════════════ */
 export type CartItem = {
   productId: number;
   name: string;
   code: string;
-  emoji: string;              // fallback kalau API tidak punya
-  imageUrl: string | null;    // dari API
+  emoji: string;
+  imageUrl: string | null;
   price: number;
   discountPrice: number | null;
   minimalDiscount: number | null;
@@ -14,52 +17,17 @@ export type CartItem = {
 
 type CartState = {
   items: CartItem[];
-  addItem: (p: Omit<CartItem, 'quantity'>) => void;
+  addItem: (item: Omit<CartItem, 'quantity'>) => void;
+  removeItem: (productId: number) => void;
   increment: (productId: number) => void;
   decrement: (productId: number) => void;
-  removeItem: (productId: number) => void;
   clear: () => void;
+  setItems: (items: CartItem[]) => void;  // ⭐ TAMBAH INI
 };
 
-export const useCart = create<CartState>((set) => ({
-  items: [],
-
-  addItem: (p) =>
-    set((s) => {
-      const existing = s.items.find((i) => i.productId === p.productId);
-      if (existing) {
-        return {
-          items: s.items.map((i) =>
-            i.productId === p.productId ? { ...i, quantity: i.quantity + 1 } : i
-          ),
-        };
-      }
-      return { items: [...s.items, { ...p, quantity: 1 }] };
-    }),
-
-  increment: (id) =>
-    set((s) => ({
-      items: s.items.map((i) =>
-        i.productId === id ? { ...i, quantity: i.quantity + 1 } : i
-      ),
-    })),
-
-  decrement: (id) =>
-    set((s) => ({
-      items: s.items
-        .map((i) =>
-          i.productId === id ? { ...i, quantity: i.quantity - 1 } : i
-        )
-        .filter((i) => i.quantity > 0),
-    })),
-
-  removeItem: (id) =>
-    set((s) => ({ items: s.items.filter((i) => i.productId !== id) })),
-
-  clear: () => set({ items: [] }),
-}));
-
-/** Logika harga efektif — SAMA dengan backend Product::effectivePriceFor() */
+/* ══════════════════════════════════════════════════════
+   Helpers
+   ══════════════════════════════════════════════════════ */
 export function effectivePrice(item: CartItem): number {
   if (
     item.discountPrice != null &&
@@ -80,5 +48,59 @@ export function calcTotals(items: CartItem[]) {
     total += effectivePrice(item) * item.quantity;
   }
 
-  return { subtotal, discount: subtotal - total, total };
+  return {
+    subtotal,
+    discount: subtotal - total,
+    total,
+  };
 }
+
+/* ══════════════════════════════════════════════════════
+   Store
+   ══════════════════════════════════════════════════════ */
+export const useCart = create<CartState>((set) => ({
+  items: [],
+
+  addItem: (item) =>
+    set((state) => {
+      const existing = state.items.find((i) => i.productId === item.productId);
+      if (existing) {
+        return {
+          items: state.items.map((i) =>
+            i.productId === item.productId
+              ? { ...i, quantity: i.quantity + 1 }
+              : i
+          ),
+        };
+      }
+      return { items: [...state.items, { ...item, quantity: 1 }] };
+    }),
+
+  removeItem: (productId) =>
+    set((state) => ({
+      items: state.items.filter((i) => i.productId !== productId),
+    })),
+
+  increment: (productId) =>
+    set((state) => ({
+      items: state.items.map((i) =>
+        i.productId === productId ? { ...i, quantity: i.quantity + 1 } : i
+      ),
+    })),
+
+  decrement: (productId) =>
+    set((state) => ({
+      items: state.items
+        .map((i) =>
+          i.productId === productId
+            ? { ...i, quantity: Math.max(0, i.quantity - 1) }
+            : i
+        )
+        .filter((i) => i.quantity > 0),
+    })),
+
+  clear: () => set({ items: [] }),
+
+  // ⭐ Set items langsung (untuk edit mode)
+  setItems: (items) => set({ items }),
+}));

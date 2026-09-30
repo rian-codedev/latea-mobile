@@ -8,12 +8,15 @@ import {
   Image,
   Modal,
   useWindowDimensions,
+  RefreshControl,
+  AppState,
+  type AppStateStatus,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColorScheme } from 'nativewind';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
@@ -28,7 +31,8 @@ import {
   ChevronRight,
   AlertTriangle,
   Clock,
-  BarChart3,
+  RefreshCw,
+  Trash2,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useSession } from '@/lib/session';
@@ -37,6 +41,7 @@ import {
   fetchSales,
   fetchSaleDetail,
   fetchProductSummary,
+  deleteSale,
   type Sale,
   type SaleListItem,
   type ProductSummaryItem,
@@ -93,8 +98,11 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
-
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { user, signOut } = useSession();
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const isWide = width >= 900;
   const storeId = user?.store_id;
@@ -106,9 +114,23 @@ export default function DashboardScreen() {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(timer);
-  }, []);
+    const subscription = AppState.addEventListener(
+      'change',
+      (nextState: AppStateStatus) => {
+        if (nextState === 'active') {
+          // App baru saja aktif — refresh data
+          queryClient.invalidateQueries({
+            queryKey: ['sales', 'today', storeId],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ['sales', 'product-summary', storeId],
+          });
+        }
+      }
+    );
+
+    return () => subscription.remove();
+  }, [queryClient, storeId]);
 
   const timeLabel = useMemo(
     () =>
@@ -172,26 +194,50 @@ export default function DashboardScreen() {
   });
 
   const todayStats = useMemo(() => {
-    const list = salesToday?.data ?? [];
+    const list = (salesToday?.data ?? []).filter(
+      (s) => s.status === 'completed'   // ⭐
+    );
     const salesTotal = list.reduce((a, s) => a + s.total, 0);
     const transactions = list.length;
     const itemsSold = list.reduce((a, s) => a + (s.total_quantity ?? 0), 0);
     return { salesTotal, transactions, itemsSold };
   }, [salesToday]);
 
-  const recent = useMemo(() => salesToday?.data ?? [], [salesToday]);
+  const recent = useMemo(() => {
+    const list = salesToday?.data ?? [];
+    return list.filter((s) => s.status === 'completed');   // ⭐
+  }, [salesToday]);
 
   const [selectedSaleId, setSelectedSaleId] = useState<number | null>(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const { data: saleDetail, isLoading: isLoadingDetail } = useQuery({
+  const {
+    data: saleDetail,
+    isLoading: isLoadingDetail,
+    isError: isDetailError,
+    error: detailError,
+    refetch: refetchDetail,
+  } = useQuery({
     queryKey: ['sale', 'detail', selectedSaleId],
     queryFn: () => fetchSaleDetail(selectedSaleId!),
     enabled: !!selectedSaleId,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0,
+    retry: 1,
   });
 
+  const canModifySale = useMemo(() => {
+    if (!saleDetail) return false;
+    // Hanya hari ini
+    const saleDate = new Date(saleDetail.sale_date);
+    const today = new Date();
+    const isToday =
+      saleDate.toDateString() === today.toDateString();
+    // Hanya pembuat
+    return isToday && saleDetail.status === 'completed';
+  }, [saleDetail, user]);
+
+  /* ── 1. Base callbacks (no deps) ── */
   const handleSalePress = useCallback((saleId: number) => {
     setSelectedSaleId(saleId);
   }, []);
@@ -208,6 +254,67 @@ export default function DashboardScreen() {
     setLogoutConfirmOpen(true);
   }, []);
 
+  const handleDelete = useCallback(() => {
+    setDeleteConfirmOpen(true);
+  }, []);
+
+  const cancelDelete = useCallback(() => {
+    if (isDeleting) return;
+    setDeleteConfirmOpen(false);
+  }, [isDeleting]);
+
+  const cancelLogout = useCallback(() => {
+    if (isLoggingOut) return;
+    setLogoutConfirmOpen(false);
+  }, [isLoggingOut]);
+
+  /* ── 2. Derived callbacks (pakai base) ── */
+  const handleEdit = useCallback(() => {
+    if (!selectedSaleId) return;
+    closeDetail();
+    router.push(`/(app)/cashier?editSaleId=${selectedSaleId}`);
+  }, [selectedSaleId, closeDetail]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!selectedSaleId || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await deleteSale(selectedSaleId);
+      await queryClient.invalidateQueries({
+        queryKey: ['sales', 'today', storeId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['sales', 'product-summary', storeId],
+      });
+      setDeleteConfirmOpen(false);
+      closeDetail();
+    } catch (e) {
+      console.log('[Dashboard] Delete failed:', e);
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [selectedSaleId, isDeleting, queryClient, storeId, closeDetail]);
+
+  const refreshAll = useCallback(async () => {
+    if (!storeId) return;
+    setIsRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({
+        queryKey: ['sales', 'today', storeId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['sales', 'product-summary', storeId],
+      });
+      await queryClient.refetchQueries({
+        queryKey: ['products', storeId],
+      });
+    } catch (e) {
+      console.warn('[Dashboard] Refresh failed:', e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [queryClient, storeId]);
+
   const confirmLogout = useCallback(async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
@@ -218,11 +325,6 @@ export default function DashboardScreen() {
       setLogoutConfirmOpen(false);
     }
   }, [signOut, isLoggingOut]);
-
-  const cancelLogout = useCallback(() => {
-    if (isLoggingOut) return;
-    setLogoutConfirmOpen(false);
-  }, [isLoggingOut]);
 
   const scrollContentStyle = useMemo(
     () => ({
@@ -249,6 +351,14 @@ export default function DashboardScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={scrollContentStyle}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={refreshAll}
+            tintColor={isDark ? '#A3C9A8' : '#84A98C'}
+            colors={['#84A98C']}
+          />
+        }
       >
         <View className={isWide ? 'flex-row items-start gap-4' : 'gap-4'}>
           {/* ═══ KOLOM KIRI ═══ */}
@@ -327,6 +437,27 @@ export default function DashboardScreen() {
             fullDate={dateFullLabel}
             expanded={isWide}
           />
+          {/* ⭐ Tombol refresh */}
+          <Pressable
+            onPress={refreshAll}
+            disabled={isRefreshing}
+            hitSlop={8}
+            accessibilityLabel="Refresh data"
+            className="size-10 items-center justify-center rounded-full active:bg-muted/60 dark:active:bg-stone-800/60"
+          >
+            {isRefreshing ? (
+              <ActivityIndicator
+                size="small"
+                color={isDark ? '#A3C9A8' : '#84A98C'}
+              />
+            ) : (
+              <Icon
+                as={RefreshCw}
+                size={17}
+                className="text-muted-foreground dark:text-stone-400"
+              />
+            )}
+          </Pressable>
 
           <Pressable
             onPress={requestLogout}
@@ -343,19 +474,63 @@ export default function DashboardScreen() {
         </View>
       </BlurView>
 
-      {/* ══ DETAIL SALE MODAL — LOADING ══ */}
+      {/* ══ DETAIL SALE MODAL — LOADING / ERROR ══ */}
       <Modal
-        visible={!!selectedSaleId && isLoadingDetail}
+        visible={!!selectedSaleId && (isLoadingDetail || isDetailError)}
         transparent
         animationType="fade"
         onRequestClose={closeDetail}
       >
-        <View className="flex-1 items-center justify-center bg-black/40">
-          <View className="items-center gap-3 rounded-2xl bg-white p-6 dark:bg-stone-900">
-            <ActivityIndicator size="large" />
-            <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-              Memuat detail transaksi...
-            </Text>
+        <View className="flex-1 items-center justify-center bg-black/40 px-6">
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={closeDetail}
+          />
+          <View className="w-full max-w-[320px] items-center gap-3 rounded-2xl bg-white p-6 dark:bg-stone-900">
+            {isLoadingDetail ? (
+              <>
+                <ActivityIndicator size="large" />
+                <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
+                  Memuat detail transaksi...
+                </Text>
+              </>
+            ) : (
+              <>
+                <View className="size-12 items-center justify-center rounded-full bg-destructive/10 dark:bg-red-500/15">
+                  <Icon
+                    as={AlertTriangle}
+                    size={22}
+                    className="text-destructive dark:text-red-400"
+                  />
+                </View>
+                <Text className="text-center font-dm-bold text-sm text-foreground dark:text-stone-50">
+                  Gagal memuat transaksi
+                </Text>
+                <Text className="text-center font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
+                  {detailError instanceof Error
+                    ? detailError.message
+                    : 'Silakan coba lagi.'}
+                </Text>
+                <View className="mt-1 flex-row gap-2">
+                  <Pressable
+                    onPress={closeDetail}
+                    className="h-10 flex-1 items-center justify-center rounded-full border border-border/60 bg-white active:opacity-80 dark:border-stone-700/60 dark:bg-stone-900"
+                  >
+                    <Text className="font-dm-bold text-xs text-foreground dark:text-stone-50">
+                      Tutup
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => refetchDetail()}
+                    className="h-10 flex-1 items-center justify-center rounded-full bg-primary active:opacity-90 dark:bg-sage-500"
+                  >
+                    <Text className="font-dm-bold text-xs text-primary-foreground">
+                      Coba Lagi
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -363,8 +538,16 @@ export default function DashboardScreen() {
       {/* ══ DETAIL SALE MODAL — RECEIPT ══ */}
       <ReceiptModal
         sale={saleDetail ?? null}
-        visible={!!saleDetail && !isLoadingDetail}
+        visible={
+          !!selectedSaleId &&
+          !!saleDetail &&
+          !isLoadingDetail &&
+          !isDetailError
+        }
         onClose={closeDetail}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        canModify={canModifySale}
       />
 
       {/* ══ LOGOUT CONFIRMATION MODAL ══ */}
@@ -374,6 +557,83 @@ export default function DashboardScreen() {
         onConfirm={confirmLogout}
         onCancel={cancelLogout}
       />
+
+      {/* ⭐ DELETE CONFIRMATION MODAL */}
+      <Modal
+        visible={deleteConfirmOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDelete}
+      >
+        <View className="flex-1 items-center justify-center bg-black/40 px-6">
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={cancelDelete}
+            disabled={isDeleting}
+          />
+
+          <View
+            style={{ width: '100%', maxWidth: 360 }}
+            className="overflow-hidden rounded-3xl bg-white dark:bg-stone-900"
+          >
+            <View className="items-center gap-3 px-6 pt-6">
+              <View className="size-14 items-center justify-center rounded-full bg-red-500/10 dark:bg-red-500/15">
+                <Icon
+                  as={Trash2}
+                  size={26}
+                  className="text-red-600 dark:text-red-400"
+                />
+              </View>
+
+              <View className="items-center gap-1">
+                <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
+                  Hapus transaksi ini?
+                </Text>
+                <Text className="text-center font-dm-regular text-xs leading-4 text-muted-foreground dark:text-stone-400">
+                  Transaksi {saleDetail?.invoice_number} akan dibatalkan.
+                  Tindakan ini tidak dapat dibatalkan.
+                </Text>
+              </View>
+            </View>
+
+            <View className="mt-6 flex-row gap-2 border-t border-border/40 bg-muted/30 p-4 dark:border-stone-800/60 dark:bg-stone-800/30">
+              <Pressable
+                onPress={cancelDelete}
+                disabled={isDeleting}
+                className="h-11 flex-1 items-center justify-center rounded-full border border-border/60 bg-white active:opacity-80 dark:border-stone-700/60 dark:bg-stone-900"
+              >
+                <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
+                  Batal
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={confirmDelete}
+                disabled={isDeleting}
+                className={
+                  isDeleting
+                    ? 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-red-500/60 dark:bg-red-500/50'
+                    : 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-red-500 active:opacity-90 dark:bg-red-500'
+                }
+              >
+                {isDeleting ? (
+                  <>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text className="font-dm-bold text-sm text-white">
+                      Menghapus...
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Icon as={Trash2} size={15} className="text-white" />
+                    <Text className="font-dm-bold text-sm text-white">Hapus</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -546,9 +806,8 @@ const StartCard = React.memo(function StartCard({
 
   return (
     <View
-      className={`overflow-hidden rounded-3xl border border-border/40 dark:border-stone-800/60 ${
-        large ? 'p-8' : 'p-6'
-      }`}
+      className={`overflow-hidden rounded-3xl border border-border/40 dark:border-stone-800/60 ${large ? 'p-8' : 'p-6'
+        }`}
     >
       <LinearGradient
         colors={gradientA}
@@ -587,9 +846,8 @@ const StartCard = React.memo(function StartCard({
         </Text>
 
         <Text
-          className={`mt-1 font-dm-extrabold tracking-tight text-foreground dark:text-stone-50 ${
-            large ? 'text-4xl' : 'text-3xl'
-          }`}
+          className={`mt-1 font-dm-extrabold tracking-tight text-foreground dark:text-stone-50 ${large ? 'text-4xl' : 'text-3xl'
+            }`}
         >
           Mulai transaksi
         </Text>
@@ -616,7 +874,7 @@ const StartCard = React.memo(function StartCard({
           </Pressable>
 
           <View className="flex-row items-center gap-2">
-            <Pill icon={Package} text={`${activeProducts} produk aktif`} />
+            <Pill icon={Package} text={`${activeProducts} produk`} />
             {promoProducts > 0 ? (
               <Pill icon={Tag} text={`${promoProducts} promo`} />
             ) : null}
@@ -667,9 +925,8 @@ const StatCard = React.memo(function StatCard({
 }) {
   return (
     <View
-      className={`min-w-[140px] gap-3 rounded-2xl border border-border/40 bg-white p-4 dark:border-stone-800/60 dark:bg-stone-900 ${
-        wide ? 'w-full' : 'flex-1'
-      }`}
+      className={`min-w-[140px] gap-3 rounded-2xl border border-border/40 bg-white p-4 dark:border-stone-800/60 dark:bg-stone-900 ${wide ? 'w-full' : 'flex-1'
+        }`}
     >
       <View className="size-9 items-center justify-center rounded-xl bg-accent/60 dark:bg-stone-800">
         <Icon
@@ -754,33 +1011,30 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
             return (
               <View
                 key={product.product_id}
-                className={`flex-row items-center gap-3 px-4 py-2.5 ${
-                  index < products.length - 1
-                    ? 'border-b border-border/30 dark:border-stone-800/40'
-                    : ''
-                }`}
+                className={`flex-row items-center gap-3 px-4 py-2.5 ${index < products.length - 1
+                  ? 'border-b border-border/30 dark:border-stone-800/40'
+                  : ''
+                  }`}
               >
                 <View
-                  className={`size-6 shrink-0 items-center justify-center rounded-full ${
-                    index === 0
-                      ? 'bg-amber-100 dark:bg-amber-950/60'
-                      : index === 1
-                        ? 'bg-stone-200 dark:bg-stone-700'
-                        : index === 2
-                          ? 'bg-orange-100 dark:bg-orange-950/60'
-                          : 'bg-stone-100 dark:bg-stone-800'
-                  }`}
+                  className={`size-6 shrink-0 items-center justify-center rounded-full ${index === 0
+                    ? 'bg-amber-100 dark:bg-amber-950/60'
+                    : index === 1
+                      ? 'bg-stone-200 dark:bg-stone-700'
+                      : index === 2
+                        ? 'bg-orange-100 dark:bg-orange-950/60'
+                        : 'bg-stone-100 dark:bg-stone-800'
+                    }`}
                 >
                   <Text
-                    className={`font-dm-extrabold text-[10px] ${
-                      index === 0
-                        ? 'text-amber-700 dark:text-amber-400'
-                        : index === 1
-                          ? 'text-stone-700 dark:text-stone-300'
-                          : index === 2
-                            ? 'text-orange-700 dark:text-orange-400'
-                            : 'text-stone-500 dark:text-stone-400'
-                    }`}
+                    className={`font-dm-extrabold text-[10px] ${index === 0
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : index === 1
+                        ? 'text-stone-700 dark:text-stone-300'
+                        : index === 2
+                          ? 'text-orange-700 dark:text-orange-400'
+                          : 'text-stone-500 dark:text-stone-400'
+                      }`}
                   >
                     {index + 1}
                   </Text>
@@ -880,11 +1134,10 @@ const RecentCard = React.memo(function RecentCard({
                 onPress={() => onSalePress(t.id)}
                 accessibilityRole="button"
                 accessibilityLabel={`Lihat detail transaksi ${t.invoice_number}`}
-                className={`flex-row items-center gap-3 px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${
-                  i < sales.length - 1
-                    ? 'border-b border-border/30 dark:border-stone-800/40'
-                    : ''
-                }`}
+                className={`flex-row items-center gap-3 px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${i < sales.length - 1
+                  ? 'border-b border-border/30 dark:border-stone-800/40'
+                  : ''
+                  }`}
               >
                 <View className="size-10 items-center justify-center rounded-full bg-accent/60 dark:bg-stone-800">
                   <Icon
@@ -1012,11 +1265,10 @@ const ProductListCard = React.memo(function ProductListCard({
             return (
               <View
                 key={p.id}
-                className={`flex-row items-center gap-3 px-4 py-2.5 ${
-                  i < preview.length - 1 || remaining > 0
-                    ? 'border-b border-border/30 dark:border-stone-800/40'
-                    : ''
-                }`}
+                className={`flex-row items-center gap-3 px-4 py-2.5 ${i < preview.length - 1 || remaining > 0
+                  ? 'border-b border-border/30 dark:border-stone-800/40'
+                  : ''
+                  }`}
               >
                 <ProductImage uri={p.image_url} emoji={p.emoji} size={48} />
 
