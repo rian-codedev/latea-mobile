@@ -56,7 +56,6 @@ import { formatRupiah } from '@/lib/format';
    Konstanta
    ══════════════════════════════════════════════════════ */
 const HEADER_HEIGHT = 60;
-const PRODUCT_PREVIEW_LIMIT = 5;
 const RECENT_ITEM_HEIGHT = 62;
 const RECENT_VISIBLE_ITEMS = 5;
 const RECENT_MAX_HEIGHT = RECENT_ITEM_HEIGHT * RECENT_VISIBLE_ITEMS;
@@ -74,14 +73,6 @@ function getGreeting() {
   if (h < 15) return 'Selamat siang';
   if (h < 18) return 'Selamat sore';
   return 'Selamat malam';
-}
-
-function todayString(): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
 }
 
 function formatTime(iso: string): string {
@@ -113,56 +104,26 @@ export default function DashboardScreen() {
   const storeName = user?.store?.name ?? 'Toko';
   const initial = cashierName.charAt(0).toUpperCase() || 'K';
 
+  // ⭐ FIX: State waktu HP sebagai cadangan (fallback)
   const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    // Timer untuk update jam HP setiap menit (jika server_time tidak ada)
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const subscription = AppState.addEventListener(
       'change',
       (nextState: AppStateStatus) => {
         if (nextState === 'active') {
-          // App baru saja aktif — refresh data
-          queryClient.invalidateQueries({
-            queryKey: ['sales', 'today', storeId],
-          });
-          queryClient.invalidateQueries({
-            queryKey: ['sales', 'product-summary', storeId],
-          });
+          queryClient.invalidateQueries({ queryKey: ['sales'] });
         }
       }
     );
-
     return () => subscription.remove();
-  }, [queryClient, storeId]);
-
-  const timeLabel = useMemo(
-    () =>
-      now.toLocaleTimeString('id-ID', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }),
-    [now]
-  );
-
-  const dayLabel = useMemo(
-    () =>
-      now.toLocaleDateString('id-ID', {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-      }),
-    [now]
-  );
-
-  const dateFullLabel = useMemo(
-    () =>
-      now.toLocaleDateString('id-ID', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-      }),
-    [now]
-  );
+  }, [queryClient]);
 
   const { data: products = [] } = useProducts(storeId);
 
@@ -181,22 +142,36 @@ export default function DashboardScreen() {
     [products]
   );
 
-  const today = todayString();
-
-  const { data: salesToday } = useQuery({
-    queryKey: ['sales', 'today', storeId, today],
-    queryFn: () => fetchSales({ date_from: today, date_to: today }),
+  const { data: salesToday, isLoading: isLoadingSales } = useQuery({
+    queryKey: ['sales', 'today', storeId],
+    queryFn: () => fetchSales(), 
     enabled: !!storeId,
+    staleTime: 0,
+    refetchInterval: 60000, 
   });
 
   const { data: productSummary = [] } = useQuery({
-    queryKey: ['sales', 'product-summary', storeId, today],
-    queryFn: () => fetchProductSummary({ date_from: today, date_to: today }),
+    queryKey: ['sales', 'product-summary', storeId],
+    queryFn: () => fetchProductSummary(),
     enabled: !!storeId,
+    staleTime: 0,
+    refetchInterval: 60000, 
   });
 
+  // ⭐ FIX: Ambil dari server, jika tidak ada pakai waktu HP
+  const serverTime = salesToday?.meta?.server_time;
+  
+  const timeLabel = serverTime?.time ?? now.toLocaleTimeString('id-ID', {
+    hour: '2-digit', minute: '2-digit', hour12: false
+  });
+  
+  const dateFullLabel = serverTime?.date_full ?? now.toLocaleDateString('id-ID', {
+    weekday: 'long', day: 'numeric', month: 'long'
+  });
+  
+  const dayLabel = ''; 
+
   const todayStats = useMemo(() => {
-    // ⭐ Ambil langsung dari metrics backend
     if (salesToday?.metrics) {
       return {
         salesTotal: salesToday.metrics.my_revenue,
@@ -204,8 +179,6 @@ export default function DashboardScreen() {
         itemsSold: salesToday.metrics.my_items_sold,
       };
     }
-
-    // Fallback (jika backend belum diupdate)
     const list = (salesToday?.data ?? []).filter((s) => s.status === 'completed');
     return {
       salesTotal: list.reduce((a, s) => a + s.total, 0),
@@ -216,7 +189,7 @@ export default function DashboardScreen() {
 
   const recent = useMemo(() => {
     const list = salesToday?.data ?? [];
-    return list.filter((s) => s.status === 'completed');   // ⭐
+    return list.filter((s) => s.status === 'completed');
   }, [salesToday]);
 
   const [selectedSaleId, setSelectedSaleId] = useState<number | null>(null);
@@ -239,16 +212,12 @@ export default function DashboardScreen() {
 
   const canModifySale = useMemo(() => {
     if (!saleDetail) return false;
-    // Hanya hari ini
     const saleDate = new Date(saleDetail.sale_date);
     const today = new Date();
-    const isToday =
-      saleDate.toDateString() === today.toDateString();
-    // Hanya pembuat
+    const isToday = saleDate.toDateString() === today.toDateString();
     return isToday && saleDetail.status === 'completed';
-  }, [saleDetail, user]);
+  }, [saleDetail]);
 
-  /* ── 1. Base callbacks (no deps) ── */
   const handleSalePress = useCallback((saleId: number) => {
     setSelectedSaleId(saleId);
   }, []);
@@ -279,7 +248,6 @@ export default function DashboardScreen() {
     setLogoutConfirmOpen(false);
   }, [isLoggingOut]);
 
-  /* ── 2. Derived callbacks (pakai base) ── */
   const handleEdit = useCallback(() => {
     if (!selectedSaleId) return;
     closeDetail();
@@ -291,12 +259,7 @@ export default function DashboardScreen() {
     setIsDeleting(true);
     try {
       await deleteSale(selectedSaleId);
-      await queryClient.invalidateQueries({
-        queryKey: ['sales', 'today', storeId],
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ['sales', 'product-summary', storeId],
-      });
+      await queryClient.invalidateQueries({ queryKey: ['sales'] });
       setDeleteConfirmOpen(false);
       closeDetail();
     } catch (e) {
@@ -304,21 +267,14 @@ export default function DashboardScreen() {
     } finally {
       setIsDeleting(false);
     }
-  }, [selectedSaleId, isDeleting, queryClient, storeId, closeDetail]);
+  }, [selectedSaleId, isDeleting, queryClient, closeDetail]);
 
   const refreshAll = useCallback(async () => {
     if (!storeId) return;
     setIsRefreshing(true);
     try {
-      await queryClient.invalidateQueries({
-        queryKey: ['sales', 'today', storeId],
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ['sales', 'product-summary', storeId],
-      });
-      await queryClient.refetchQueries({
-        queryKey: ['products', storeId],
-      });
+      await queryClient.invalidateQueries({ queryKey: ['sales'] });
+      await queryClient.refetchQueries({ queryKey: ['products', storeId] });
     } catch (e) {
       console.warn('[Dashboard] Refresh failed:', e);
     } finally {
@@ -356,6 +312,18 @@ export default function DashboardScreen() {
     }),
     [insets.top]
   );
+
+  // ⭐ Tampilkan loading layar penuh di awal buka aplikasi (agar tidak terlihat "Memuat..." di header)
+  if (isLoadingSales && !!storeId) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white dark:bg-stone-950">
+        <ActivityIndicator size="large" color={isDark ? '#A3C9A8' : '#84A98C'} />
+        <Text className="mt-4 font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
+          Memuat data dashboard...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-white dark:bg-stone-950">
@@ -448,7 +416,7 @@ export default function DashboardScreen() {
             fullDate={dateFullLabel}
             expanded={isWide}
           />
-          {/* ⭐ Tombol refresh */}
+          
           <Pressable
             onPress={refreshAll}
             disabled={isRefreshing}
@@ -493,10 +461,7 @@ export default function DashboardScreen() {
         onRequestClose={closeDetail}
       >
         <View className="flex-1 items-center justify-center bg-black/40 px-6">
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={closeDetail}
-          />
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeDetail} />
           <View className="w-full max-w-[320px] items-center gap-3 rounded-2xl bg-white p-6 dark:bg-stone-900">
             {isLoadingDetail ? (
               <>
@@ -508,19 +473,13 @@ export default function DashboardScreen() {
             ) : (
               <>
                 <View className="size-12 items-center justify-center rounded-full bg-destructive/10 dark:bg-red-500/15">
-                  <Icon
-                    as={AlertTriangle}
-                    size={22}
-                    className="text-destructive dark:text-red-400"
-                  />
+                  <Icon as={AlertTriangle} size={22} className="text-destructive dark:text-red-400" />
                 </View>
                 <Text className="text-center font-dm-bold text-sm text-foreground dark:text-stone-50">
                   Gagal memuat transaksi
                 </Text>
                 <Text className="text-center font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-                  {detailError instanceof Error
-                    ? detailError.message
-                    : 'Silakan coba lagi.'}
+                  {detailError instanceof Error ? detailError.message : 'Silakan coba lagi.'}
                 </Text>
                 <View className="mt-1 flex-row gap-2">
                   <Pressable
@@ -549,12 +508,7 @@ export default function DashboardScreen() {
       {/* ══ DETAIL SALE MODAL — RECEIPT ══ */}
       <ReceiptModal
         sale={saleDetail ?? null}
-        visible={
-          !!selectedSaleId &&
-          !!saleDetail &&
-          !isLoadingDetail &&
-          !isDetailError
-        }
+        visible={!!selectedSaleId && !!saleDetail && !isLoadingDetail && !isDetailError}
         onClose={closeDetail}
         onEdit={handleEdit}
         onDelete={handleDelete}
@@ -577,36 +531,21 @@ export default function DashboardScreen() {
         onRequestClose={cancelDelete}
       >
         <View className="flex-1 items-center justify-center bg-black/40 px-6">
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={cancelDelete}
-            disabled={isDeleting}
-          />
-
-          <View
-            style={{ width: '100%', maxWidth: 360 }}
-            className="overflow-hidden rounded-3xl bg-white dark:bg-stone-900"
-          >
+          <Pressable style={StyleSheet.absoluteFill} onPress={cancelDelete} disabled={isDeleting} />
+          <View style={{ width: '100%', maxWidth: 360 }} className="overflow-hidden rounded-3xl bg-white dark:bg-stone-900">
             <View className="items-center gap-3 px-6 pt-6">
               <View className="size-14 items-center justify-center rounded-full bg-red-500/10 dark:bg-red-500/15">
-                <Icon
-                  as={Trash2}
-                  size={26}
-                  className="text-red-600 dark:text-red-400"
-                />
+                <Icon as={Trash2} size={26} className="text-red-600 dark:text-red-400" />
               </View>
-
               <View className="items-center gap-1">
                 <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
                   Hapus transaksi ini?
                 </Text>
                 <Text className="text-center font-dm-regular text-xs leading-4 text-muted-foreground dark:text-stone-400">
-                  Transaksi {saleDetail?.invoice_number} akan dibatalkan.
-                  Tindakan ini tidak dapat dibatalkan.
+                  Transaksi {saleDetail?.invoice_number} akan dibatalkan. Tindakan ini tidak dapat dibatalkan.
                 </Text>
               </View>
             </View>
-
             <View className="mt-6 flex-row gap-2 border-t border-border/40 bg-muted/30 p-4 dark:border-stone-800/60 dark:bg-stone-800/30">
               <Pressable
                 onPress={cancelDelete}
@@ -617,22 +556,15 @@ export default function DashboardScreen() {
                   Batal
                 </Text>
               </Pressable>
-
               <Pressable
                 onPress={confirmDelete}
                 disabled={isDeleting}
-                className={
-                  isDeleting
-                    ? 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-red-500/60 dark:bg-red-500/50'
-                    : 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-red-500 active:opacity-90 dark:bg-red-500'
-                }
+                className={isDeleting ? 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-red-500/60 dark:bg-red-500/50' : 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-red-500 active:opacity-90 dark:bg-red-500'}
               >
                 {isDeleting ? (
                   <>
                     <ActivityIndicator size="small" color="#FFFFFF" />
-                    <Text className="font-dm-bold text-sm text-white">
-                      Menghapus...
-                    </Text>
+                    <Text className="font-dm-bold text-sm text-white">Menghapus...</Text>
                   </>
                 ) : (
                   <>
@@ -676,11 +608,7 @@ const DateTimePill = React.memo(function DateTimePill({
 
   return (
     <View className="flex-row items-center gap-2 rounded-full border border-border/40 bg-white/70 px-3 py-1.5 dark:border-stone-800/60 dark:bg-stone-900/70">
-      <Icon
-        as={Clock}
-        size={11}
-        className="text-primary dark:text-sage-400"
-      />
+      <Icon as={Clock} size={11} className="text-primary dark:text-sage-400" />
       <Text className="font-mono text-[11px] font-bold tracking-tight text-foreground dark:text-stone-50">
         {time}
       </Text>
@@ -707,32 +635,14 @@ const LogoutConfirmModal = React.memo(function LogoutConfirmModal({
   onCancel: () => void;
 }) {
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onCancel}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View className="flex-1 items-center justify-center bg-black/40 px-6">
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={onCancel}
-          disabled={isLoading}
-        />
-
-        <View
-          style={{ width: '100%', maxWidth: 360 }}
-          className="overflow-hidden rounded-3xl bg-white dark:bg-stone-900"
-        >
+        <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} disabled={isLoading} />
+        <View style={{ width: '100%', maxWidth: 360 }} className="overflow-hidden rounded-3xl bg-white dark:bg-stone-900">
           <View className="items-center gap-3 px-6 pt-6">
             <View className="size-14 items-center justify-center rounded-full bg-destructive/10 dark:bg-red-500/15">
-              <Icon
-                as={AlertTriangle}
-                size={26}
-                className="text-destructive dark:text-red-400"
-              />
+              <Icon as={AlertTriangle} size={26} className="text-destructive dark:text-red-400" />
             </View>
-
             <View className="items-center gap-1">
               <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
                 Keluar dari aplikasi?
@@ -742,40 +652,28 @@ const LogoutConfirmModal = React.memo(function LogoutConfirmModal({
               </Text>
             </View>
           </View>
-
           <View className="mt-6 flex-row gap-2 border-t border-border/40 bg-muted/30 p-4 dark:border-stone-800/60 dark:bg-stone-800/30">
             <Pressable
               onPress={onCancel}
               disabled={isLoading}
               className="h-11 flex-1 items-center justify-center rounded-full border border-border/60 bg-white active:opacity-80 dark:border-stone-700/60 dark:bg-stone-900"
             >
-              <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
-                Batal
-              </Text>
+              <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">Batal</Text>
             </Pressable>
-
             <Pressable
               onPress={onConfirm}
               disabled={isLoading}
-              className={
-                isLoading
-                  ? 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-destructive/60 dark:bg-red-500/50'
-                  : 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-destructive active:opacity-90 dark:bg-red-500'
-              }
+              className={isLoading ? 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-destructive/60 dark:bg-red-500/50' : 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-destructive active:opacity-90 dark:bg-red-500'}
             >
               {isLoading ? (
                 <>
                   <ActivityIndicator size="small" color="#FFFFFF" />
-                  <Text className="font-dm-bold text-sm text-white">
-                    Keluar...
-                  </Text>
+                  <Text className="font-dm-bold text-sm text-white">Keluar...</Text>
                 </>
               ) : (
                 <>
                   <Icon as={LogOut} size={15} className="text-white" />
-                  <Text className="font-dm-bold text-sm text-white">
-                    Keluar
-                  </Text>
+                  <Text className="font-dm-bold text-sm text-white">Keluar</Text>
                 </>
               )}
             </Pressable>
@@ -816,50 +714,18 @@ const StartCard = React.memo(function StartCard({
   );
 
   return (
-    <View
-      className={`overflow-hidden rounded-3xl border border-border/40 dark:border-stone-800/60 ${large ? 'p-8' : 'p-6'
-        }`}
-    >
-      <LinearGradient
-        colors={gradientA}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <LinearGradient
-        colors={gradientB}
-        start={{ x: 1, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
-      />
+    <View className={`overflow-hidden rounded-3xl border border-border/40 dark:border-stone-800/60 ${large ? 'p-8' : 'p-6'}`}>
+      <LinearGradient colors={gradientA} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={gradientB} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { opacity: 0.55 }]} />
 
-      {/* Orbs — warna conditional */}
-      <View
-        className="absolute -right-20 -top-20 size-64 rounded-full"
-        style={{
-          backgroundColor: isDark
-            ? 'rgba(132,169,140,0.06)'
-            : 'rgba(255,255,255,0.4)',
-        }}
-      />
-      <View
-        className="absolute -bottom-24 right-16 size-48 rounded-full"
-        style={{
-          backgroundColor: isDark
-            ? 'rgba(132,169,140,0.04)'
-            : 'rgba(255,255,255,0.2)',
-        }}
-      />
+      <View className="absolute -right-20 -top-20 size-64 rounded-full" style={{ backgroundColor: isDark ? 'rgba(132,169,140,0.06)' : 'rgba(255,255,255,0.4)' }} />
+      <View className="absolute -bottom-24 right-16 size-48 rounded-full" style={{ backgroundColor: isDark ? 'rgba(132,169,140,0.04)' : 'rgba(255,255,255,0.2)' }} />
 
       <View className="relative">
         <Text className="font-dm-medium text-xs text-muted-foreground dark:text-stone-400">
           {storeName}
         </Text>
-
-        <Text
-          className={`mt-1 font-dm-extrabold tracking-tight text-foreground dark:text-stone-50 ${large ? 'text-4xl' : 'text-3xl'
-            }`}
-        >
+        <Text className={`mt-1 font-dm-extrabold tracking-tight text-foreground dark:text-stone-50 ${large ? 'text-4xl' : 'text-3xl'}`}>
           Mulai transaksi
         </Text>
         <Text className="mt-1.5 max-w-[360px] font-dm-regular text-sm leading-5 text-muted-foreground dark:text-stone-400">
@@ -874,16 +740,11 @@ const StartCard = React.memo(function StartCard({
             style={pressStyle}
             className="h-12 flex-row items-center gap-2 rounded-full bg-primary px-5 active:opacity-90 dark:bg-sage-500"
           >
-            <Icon
-              as={ShoppingCart}
-              size={17}
-              className="text-primary-foreground"
-            />
-            <Text className="font-dm-bold text-sm text-primary-foreground">
-              Buka kasir
-            </Text>
+            <Icon as={ShoppingCart} size={17} className="text-primary-foreground" />
+            <Text className="font-dm-bold text-sm text-primary-foreground">Buka kasir</Text>
           </Pressable>
 
+          {/* ⭐ Hapus width-auto */}
           <View className="flex-row items-center gap-2">
             <Pill icon={Package} text={`${activeProducts} produk`} />
             {promoProducts > 0 ? (
@@ -907,13 +768,9 @@ const Pill = React.memo(function Pill({
   text: string;
 }) {
   return (
-    <View className="h-8 flex-row items-center gap-1.5 rounded-full border border-border/40 bg-white/70 px-3 dark:border-stone-800/60 dark:bg-stone-900/70">
-      <Icon
-        as={icon}
-        size={13}
-        className="text-primary dark:text-sage-400"
-      />
-      <Text className="font-dm-medium text-xs text-foreground dark:text-stone-50">
+    <View className="flex-shrink-0 h-8 flex-row items-center gap-1.5 rounded-full border border-border/40 bg-white/70 px-3 dark:border-stone-800/60 dark:bg-stone-900/70">
+      <Icon as={icon} size={13} className="text-primary dark:text-sage-400" />
+      <Text className="font-dm-medium text-xs text-foreground dark:text-stone-50" numberOfLines={1}>
         {text}
       </Text>
     </View>
@@ -935,16 +792,9 @@ const StatCard = React.memo(function StatCard({
   wide?: boolean;
 }) {
   return (
-    <View
-      className={`min-w-[140px] gap-3 rounded-2xl border border-border/40 bg-white p-4 dark:border-stone-800/60 dark:bg-stone-900 ${wide ? 'w-full' : 'flex-1'
-        }`}
-    >
+    <View className={`min-w-[140px] gap-3 rounded-2xl border border-border/40 bg-white p-4 dark:border-stone-800/60 dark:bg-stone-900 ${wide ? 'w-full' : 'flex-1'}`}>
       <View className="size-9 items-center justify-center rounded-xl bg-accent/60 dark:bg-stone-800">
-        <Icon
-          as={icon}
-          size={17}
-          className="text-primary dark:text-sage-400"
-        />
+        <Icon as={icon} size={17} className="text-primary dark:text-sage-400" />
       </View>
       <View className="gap-0.5">
         <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
@@ -963,9 +813,8 @@ const StatCard = React.memo(function StatCard({
 });
 
 /* ══════════════════════════════════════════════════════
-   Product Sales Card
+   Product Sales Card (Collapsible)
    ══════════════════════════════════════════════════════ */
-
 const ProductSalesCard = React.memo(function ProductSalesCard({
   products,
 }: {
@@ -973,7 +822,7 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
 }) {
   const isEmpty = products.length === 0;
   const [isExpanded, setIsExpanded] = useState(false);
-  const INITIAL_COUNT = 4; // ⭐ Batas tampilan awal
+  const INITIAL_COUNT = 4;
 
   const toggle = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -984,7 +833,6 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
     [products]
   );
 
-  // ⭐ Tentukan data yang akan dirender
   const displayedProducts = isExpanded
     ? products
     : products.slice(0, INITIAL_COUNT);
@@ -993,7 +841,6 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
 
   return (
     <View className="overflow-hidden rounded-xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
-      {/* ═══ HEADER ═══ */}
       <Pressable
         onPress={toggle}
         accessibilityRole="button"
@@ -1002,13 +849,8 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
       >
         <View className="flex-row items-center gap-2.5">
           <View className="size-7 items-center justify-center rounded-lg bg-primary/10 dark:bg-sage-500/15">
-            <Icon
-              as={Package}
-              size={14}
-              className="text-primary dark:text-sage-400"
-            />
+            <Icon as={Package} size={14} className="text-primary dark:text-sage-400" />
           </View>
-
           <View>
             <Text className="font-dm-bold text-xs text-foreground dark:text-stone-50">
               Produk Terjual
@@ -1025,21 +867,12 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
               {products.length}
             </Text>
           </View>
-          <View
-            style={{
-              transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
-            }}
-          >
-            <Icon
-              as={ChevronDown}
-              size={16}
-              className="text-muted-foreground dark:text-stone-400"
-            />
+          <View style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }}>
+            <Icon as={ChevronDown} size={16} className="text-muted-foreground dark:text-stone-400" />
           </View>
         </View>
       </Pressable>
 
-      {/* ═══ BODY ═══ */}
       {isEmpty ? (
         <View className="items-center gap-2 px-4 py-10">
           <Text className="text-3xl">📊</Text>
@@ -1056,41 +889,17 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
             return (
               <View
                 key={product.product_id}
-                className={`flex-row items-center gap-3 px-4 py-2.5 ${index < displayedProducts.length - 1
-                    ? 'border-b border-border/30 dark:border-stone-800/40'
-                    : ''
-                  }`}
+                className={`flex-row items-center gap-3 px-4 py-2.5 ${index < displayedProducts.length - 1 ? 'border-b border-border/30 dark:border-stone-800/40' : ''}`}
               >
-                <View
-                  className={`size-6 shrink-0 items-center justify-center rounded-full ${index === 0
-                      ? 'bg-amber-100 dark:bg-amber-950/60'
-                      : index === 1
-                        ? 'bg-stone-200 dark:bg-stone-700'
-                        : index === 2
-                          ? 'bg-orange-100 dark:bg-orange-950/60'
-                          : 'bg-stone-100 dark:bg-stone-800'
-                    }`}
-                >
-                  <Text
-                    className={`font-dm-extrabold text-[10px] ${index === 0
-                        ? 'text-amber-700 dark:text-amber-400'
-                        : index === 1
-                          ? 'text-stone-700 dark:text-stone-300'
-                          : index === 2
-                            ? 'text-orange-700 dark:text-orange-400'
-                            : 'text-stone-500 dark:text-stone-400'
-                      }`}
-                  >
+                <View className={`size-6 shrink-0 items-center justify-center rounded-full ${index === 0 ? 'bg-amber-100 dark:bg-amber-950/60' : index === 1 ? 'bg-stone-200 dark:bg-stone-700' : index === 2 ? 'bg-orange-100 dark:bg-orange-950/60' : 'bg-stone-100 dark:bg-stone-800'}`}>
+                  <Text className={`font-dm-extrabold text-[10px] ${index === 0 ? 'text-amber-700 dark:text-amber-400' : index === 1 ? 'text-stone-700 dark:text-stone-300' : index === 2 ? 'text-orange-700 dark:text-orange-400' : 'text-stone-500 dark:text-stone-400'}`}>
                     {index + 1}
                   </Text>
                 </View>
 
                 <View className="min-w-0 flex-1">
                   <View className="flex-row items-center justify-between gap-2">
-                    <Text
-                      className="flex-1 truncate font-dm-medium text-[11px] text-foreground dark:text-stone-50"
-                      numberOfLines={1}
-                    >
+                    <Text className="flex-1 truncate font-dm-medium text-[11px] text-foreground dark:text-stone-50" numberOfLines={1}>
                       {product.product_name}
                     </Text>
                     <Text className="shrink-0 font-mono text-[11px] font-bold text-foreground dark:text-stone-50">
@@ -1100,12 +909,8 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
 
                   <View className="mt-1 flex-row items-center gap-2">
                     <View className="h-1 flex-1 overflow-hidden rounded-full bg-muted dark:bg-stone-800">
-                      <View
-                        style={{ width: `${percentage}%` }}
-                        className="h-full rounded-full bg-primary dark:bg-sage-400"
-                      />
+                      <View style={{ width: `${percentage}%` }} className="h-full rounded-full bg-primary dark:bg-sage-400" />
                     </View>
-
                     <Text className="shrink-0 font-mono text-[10px] text-muted-foreground dark:text-stone-400">
                       Rp {Number(product.total_revenue).toLocaleString('id-ID')}
                     </Text>
@@ -1115,7 +920,6 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
             );
           })}
 
-          {/* ⭐ FOOTER BUTTON — Muncul jika data > 4 */}
           {hasMore && (
             <Pressable
               onPress={toggle}
@@ -1124,11 +928,7 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
               <Text className="font-dm-semibold text-[11px] text-primary dark:text-sage-400">
                 {isExpanded ? 'Sembunyikan' : `Lihat ${products.length - INITIAL_COUNT} produk lainnya`}
               </Text>
-              <Icon
-                as={isExpanded ? ChevronUp : ChevronDown}
-                size={14}
-                className="text-primary dark:text-sage-400"
-              />
+              <Icon as={isExpanded ? ChevronUp : ChevronDown} size={14} className="text-primary dark:text-sage-400" />
             </Pressable>
           )}
         </View>
@@ -1163,9 +963,7 @@ const RecentCard = React.memo(function RecentCard({
             </Text>
           </View>
         ) : (
-          <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-            —
-          </Text>
+          <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">—</Text>
         )}
       </View>
 
@@ -1180,35 +978,20 @@ const RecentCard = React.memo(function RecentCard({
           </Text>
         </View>
       ) : (
-        <ScrollView
-          style={{ maxHeight: RECENT_MAX_HEIGHT }}
-          showsVerticalScrollIndicator={hasMore}
-          nestedScrollEnabled
-          bounces={false}
-        >
+        <ScrollView style={{ maxHeight: RECENT_MAX_HEIGHT }} showsVerticalScrollIndicator={hasMore} nestedScrollEnabled bounces={false}>
           {sales.map((t, i) => {
-            const shortId =
-              t.invoice_number.split('-').pop() ?? t.invoice_number;
-
+            const shortId = t.invoice_number.split('-').pop() ?? t.invoice_number;
             return (
               <Pressable
                 key={t.id}
                 onPress={() => onSalePress(t.id)}
                 accessibilityRole="button"
                 accessibilityLabel={`Lihat detail transaksi ${t.invoice_number}`}
-                className={`flex-row items-center gap-3 px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${i < sales.length - 1
-                  ? 'border-b border-border/30 dark:border-stone-800/40'
-                  : ''
-                  }`}
+                className={`flex-row items-center gap-3 px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${i < sales.length - 1 ? 'border-b border-border/30 dark:border-stone-800/40' : ''}`}
               >
                 <View className="size-10 items-center justify-center rounded-full bg-accent/60 dark:bg-stone-800">
-                  <Icon
-                    as={Receipt}
-                    size={16}
-                    className="text-primary dark:text-sage-400"
-                  />
+                  <Icon as={Receipt} size={16} className="text-primary dark:text-sage-400" />
                 </View>
-
                 <View className="flex-1">
                   <Text className="font-dm-semibold text-[13px] text-foreground dark:text-stone-50">
                     #{shortId}
@@ -1217,15 +1000,10 @@ const RecentCard = React.memo(function RecentCard({
                     {formatTime(t.sale_date)} WIB, {t.items_count} item
                   </Text>
                 </View>
-
                 <Text className="font-dm-bold text-[13px] text-foreground dark:text-stone-50">
                   {formatRupiah(t.total)}
                 </Text>
-                <Icon
-                  as={ChevronRight}
-                  size={15}
-                  className="text-muted-foreground/60 dark:text-stone-500/60"
-                />
+                <Icon as={ChevronRight} size={15} className="text-muted-foreground/60 dark:text-stone-500/60" />
               </Pressable>
             );
           })}
@@ -1261,12 +1039,7 @@ function ProductImage({
       className="items-center justify-center overflow-hidden rounded-xl border border-border/40 bg-accent/60 dark:border-stone-800/60 dark:bg-stone-800"
     >
       {showImage ? (
-        <Image
-          source={{ uri }}
-          style={{ width: '100%', height: '100%' }}
-          resizeMode="cover"
-          onError={() => setFailed(true)}
-        />
+        <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" onError={() => setFailed(true)} />
       ) : (
         <Text style={{ fontSize: size * 0.5 }}>{emoji ?? '📦'}</Text>
       )}
@@ -1275,7 +1048,7 @@ function ProductImage({
 }
 
 /* ══════════════════════════════════════════════════════
-   Product List Card
+   Product List Card (Collapsible)
    ══════════════════════════════════════════════════════ */
 const ProductListCard = React.memo(function ProductListCard({
   products,
@@ -1284,13 +1057,12 @@ const ProductListCard = React.memo(function ProductListCard({
 }) {
   const isEmpty = products.length === 0;
   const [isExpanded, setIsExpanded] = useState(false);
-  const INITIAL_COUNT = 5; // Batas tampilan awal
+  const INITIAL_COUNT = 5;
 
   const toggle = useCallback(() => {
     setIsExpanded((prev) => !prev);
   }, []);
 
-  // Tentukan data yang dirender
   const displayedProducts = isExpanded
     ? products
     : products.slice(0, INITIAL_COUNT);
@@ -1299,7 +1071,6 @@ const ProductListCard = React.memo(function ProductListCard({
 
   return (
     <View className="overflow-hidden rounded-2xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
-      {/* ═══ HEADER — Clickable to toggle ═══ */}
       <Pressable
         onPress={toggle}
         accessibilityRole="button"
@@ -1307,11 +1078,7 @@ const ProductListCard = React.memo(function ProductListCard({
         className="flex-row items-center justify-between px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40"
       >
         <View className="flex-row items-center gap-2">
-          <Icon
-            as={StoreIcon}
-            size={15}
-            className="text-primary dark:text-sage-400"
-          />
+          <Icon as={StoreIcon} size={15} className="text-primary dark:text-sage-400" />
           <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
             Produk di toko Anda
           </Text>
@@ -1325,21 +1092,12 @@ const ProductListCard = React.memo(function ProductListCard({
               </Text>
             </View>
           ) : null}
-          <View
-            style={{
-              transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
-            }}
-          >
-            <Icon
-              as={ChevronDown}
-              size={16}
-              className="text-muted-foreground dark:text-stone-400"
-            />
+          <View style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }}>
+            <Icon as={ChevronDown} size={16} className="text-muted-foreground dark:text-stone-400" />
           </View>
         </View>
       </Pressable>
 
-      {/* ═══ BODY ═══ */}
       {isEmpty ? (
         <View className="items-center gap-1 border-t border-border/40 px-4 py-10 dark:border-stone-800/60">
           <Text className="text-3xl">📦</Text>
@@ -1353,27 +1111,17 @@ const ProductListCard = React.memo(function ProductListCard({
       ) : (
         <View className="border-t border-border/40 dark:border-stone-800/60">
           {displayedProducts.map((p, i) => {
-            const hasPromo =
-              p.discount_price != null && p.minimal_discount != null;
+            const hasPromo = p.discount_price != null && p.minimal_discount != null;
             const displayPrice = hasPromo ? p.discount_price! : p.price;
 
             return (
               <View
                 key={p.id}
-                // ⭐ FIX: Hapus `|| hasMore` agar tidak terjadi double border dengan tombol footer
-                className={`flex-row items-center gap-3 px-4 py-2.5 ${
-                  i < displayedProducts.length - 1
-                    ? 'border-b border-border/30 dark:border-stone-800/40'
-                    : ''
-                }`}
+                className={`flex-row items-center gap-3 px-4 py-2.5 ${i < displayedProducts.length - 1 ? 'border-b border-border/30 dark:border-stone-800/40' : ''}`}
               >
                 <ProductImage uri={p.image_url} emoji={p.emoji} size={48} />
-
                 <View className="flex-1">
-                  <Text
-                    className="font-dm-semibold text-[12px] leading-tight text-foreground dark:text-stone-50"
-                    numberOfLines={1}
-                  >
+                  <Text className="font-dm-semibold text-[12px] leading-tight text-foreground dark:text-stone-50" numberOfLines={1}>
                     {p.name}
                   </Text>
                   <View className="mt-0.5 flex-row items-center gap-1.5">
@@ -1396,7 +1144,6 @@ const ProductListCard = React.memo(function ProductListCard({
                     )}
                   </View>
                 </View>
-
                 <View className="items-end">
                   {hasPromo ? (
                     <Text className="font-dm-regular text-[9px] text-muted-foreground line-through dark:text-stone-400">
@@ -1411,22 +1158,15 @@ const ProductListCard = React.memo(function ProductListCard({
             );
           })}
 
-          {/* ⭐ FOOTER BUTTON — Muncul jika data > 5 */}
           {hasMore && (
             <Pressable
               onPress={toggle}
               className="flex-row items-center justify-center gap-1 border-t border-border/40 bg-muted/20 py-2.5 active:bg-muted/50 dark:border-stone-800/60 dark:bg-stone-800/20 dark:active:bg-stone-800/40"
             >
               <Text className="font-dm-semibold text-[11px] text-primary dark:text-sage-400">
-                {isExpanded
-                  ? 'Sembunyikan'
-                  : `Lihat ${products.length - INITIAL_COUNT} produk lainnya`}
+                {isExpanded ? 'Sembunyikan' : `Lihat ${products.length - INITIAL_COUNT} produk lainnya`}
               </Text>
-              <Icon
-                as={isExpanded ? ChevronUp : ChevronDown}
-                size={14}
-                className="text-primary dark:text-sage-400"
-              />
+              <Icon as={isExpanded ? ChevronUp : ChevronDown} size={14} className="text-primary dark:text-sage-400" />
             </Pressable>
           )}
         </View>

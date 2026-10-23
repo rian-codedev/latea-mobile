@@ -1,5 +1,10 @@
 import { api } from './api';
 
+export type ServerTime = {
+  time: string;
+  date_full: string;
+};
+
 export type SaleItem = {
   product_id: number;
   product_name: string;
@@ -18,6 +23,7 @@ export type SalesMetrics = {
   store_revenue: number;
   store_transactions: number;
   store_items_sold: number;
+  server_time?: ServerTime;
 };
 
 export type Sale = {
@@ -73,14 +79,22 @@ export async function createSale(input: CreateSaleInput): Promise<Sale> {
   }
 }
 
-export async function fetchSales(params?: {
-  date_from?: string;
-  date_to?: string;
-  page?: number;
-}): Promise<{ data: SaleListItem[]; meta: any; metrics?: SalesMetrics }> {
-  const res = await api.get('/sales', { params });
+export async function fetchSales(): Promise<{ data: SaleListItem[]; meta: any; metrics?: SalesMetrics }> {
+  const res = await api.get('/sales'); // Tidak perlu parameter tanggal
   return res.data;
 }
+
+export async function fetchProductSummary(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<ProductSummaryItem[]> {
+  const res = await api.get<{ data: ProductSummaryItem[] }>(
+    '/sales/product-summary',
+    { params } // params bisa undefined
+  );
+  return res.data.data;
+}
+
 
 export async function fetchSaleDetail(saleId: number): Promise<Sale> {
   console.log('[fetchSaleDetail] Requesting sale ID:', saleId);
@@ -95,17 +109,6 @@ export async function fetchSaleDetail(saleId: number): Promise<Sale> {
     console.log('[fetchSaleDetail] Error headers:', e.response?.headers);
     throw e;
   }
-}
-
-export async function fetchProductSummary(params: {
-  date_from: string;
-  date_to: string;
-}): Promise<ProductSummaryItem[]> {
-  const res = await api.get<{ data: ProductSummaryItem[] }>(
-    '/sales/product-summary',
-    { params }
-  );
-  return res.data.data;
 }
 
 export async function updateSale(
