@@ -10,6 +10,7 @@ export type ApiProduct = {
   discount_price: number | null;
   minimal_discount: number | null;
   is_active: boolean;
+  is_available: boolean;
 };
 
 type ProductsResponse = {

@@ -33,6 +33,8 @@ import {
   Clock,
   RefreshCw,
   Trash2,
+  ChevronDown,
+  ChevronUp,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useSession } from '@/lib/session';
@@ -194,13 +196,22 @@ export default function DashboardScreen() {
   });
 
   const todayStats = useMemo(() => {
-    const list = (salesToday?.data ?? []).filter(
-      (s) => s.status === 'completed'   // ⭐
-    );
-    const salesTotal = list.reduce((a, s) => a + s.total, 0);
-    const transactions = list.length;
-    const itemsSold = list.reduce((a, s) => a + (s.total_quantity ?? 0), 0);
-    return { salesTotal, transactions, itemsSold };
+    // ⭐ Ambil langsung dari metrics backend
+    if (salesToday?.metrics) {
+      return {
+        salesTotal: salesToday.metrics.my_revenue,
+        transactions: salesToday.metrics.my_transactions,
+        itemsSold: salesToday.metrics.my_items_sold,
+      };
+    }
+
+    // Fallback (jika backend belum diupdate)
+    const list = (salesToday?.data ?? []).filter((s) => s.status === 'completed');
+    return {
+      salesTotal: list.reduce((a, s) => a + s.total, 0),
+      transactions: list.length,
+      itemsSold: list.reduce((a, s) => a + (s.total_quantity ?? 0), 0),
+    };
   }, [salesToday]);
 
   const recent = useMemo(() => {
@@ -954,21 +965,41 @@ const StatCard = React.memo(function StatCard({
 /* ══════════════════════════════════════════════════════
    Product Sales Card
    ══════════════════════════════════════════════════════ */
+
 const ProductSalesCard = React.memo(function ProductSalesCard({
   products,
 }: {
   products: ProductSummaryItem[];
 }) {
   const isEmpty = products.length === 0;
+  const [isExpanded, setIsExpanded] = useState(false);
+  const INITIAL_COUNT = 4; // ⭐ Batas tampilan awal
+
+  const toggle = useCallback(() => {
+    setIsExpanded((prev) => !prev);
+  }, []);
 
   const maxQty = useMemo(
     () => Math.max(...products.map((p) => Number(p.total_qty)), 1),
     [products]
   );
 
+  // ⭐ Tentukan data yang akan dirender
+  const displayedProducts = isExpanded
+    ? products
+    : products.slice(0, INITIAL_COUNT);
+
+  const hasMore = products.length > INITIAL_COUNT;
+
   return (
     <View className="overflow-hidden rounded-xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
-      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3 dark:border-stone-800/60">
+      {/* ═══ HEADER ═══ */}
+      <Pressable
+        onPress={toggle}
+        accessibilityRole="button"
+        accessibilityLabel={isExpanded ? 'Tutup daftar produk terjual' : 'Buka daftar produk terjual'}
+        className="flex-row items-center justify-between border-b border-border/40 px-4 py-3 active:bg-muted/40 dark:border-stone-800/60 dark:active:bg-stone-800/40"
+      >
         <View className="flex-row items-center gap-2.5">
           <View className="size-7 items-center justify-center rounded-lg bg-primary/10 dark:bg-sage-500/15">
             <Icon
@@ -988,13 +1019,27 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
           </View>
         </View>
 
-        <View className="rounded-full bg-muted px-2 py-0.5 dark:bg-stone-800">
-          <Text className="font-mono text-[10px] font-bold text-muted-foreground dark:text-stone-400">
-            {products.length}
-          </Text>
+        <View className="flex-row items-center gap-2">
+          <View className="rounded-full bg-muted px-2 py-0.5 dark:bg-stone-800">
+            <Text className="font-mono text-[10px] font-bold text-muted-foreground dark:text-stone-400">
+              {products.length}
+            </Text>
+          </View>
+          <View
+            style={{
+              transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
+            }}
+          >
+            <Icon
+              as={ChevronDown}
+              size={16}
+              className="text-muted-foreground dark:text-stone-400"
+            />
+          </View>
         </View>
-      </View>
+      </Pressable>
 
+      {/* ═══ BODY ═══ */}
       {isEmpty ? (
         <View className="items-center gap-2 px-4 py-10">
           <Text className="text-3xl">📊</Text>
@@ -1004,36 +1049,36 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
         </View>
       ) : (
         <View>
-          {products.map((product, index) => {
+          {displayedProducts.map((product, index) => {
             const qty = Number(product.total_qty);
             const percentage = (qty / maxQty) * 100;
 
             return (
               <View
                 key={product.product_id}
-                className={`flex-row items-center gap-3 px-4 py-2.5 ${index < products.length - 1
-                  ? 'border-b border-border/30 dark:border-stone-800/40'
-                  : ''
+                className={`flex-row items-center gap-3 px-4 py-2.5 ${index < displayedProducts.length - 1
+                    ? 'border-b border-border/30 dark:border-stone-800/40'
+                    : ''
                   }`}
               >
                 <View
                   className={`size-6 shrink-0 items-center justify-center rounded-full ${index === 0
-                    ? 'bg-amber-100 dark:bg-amber-950/60'
-                    : index === 1
-                      ? 'bg-stone-200 dark:bg-stone-700'
-                      : index === 2
-                        ? 'bg-orange-100 dark:bg-orange-950/60'
-                        : 'bg-stone-100 dark:bg-stone-800'
+                      ? 'bg-amber-100 dark:bg-amber-950/60'
+                      : index === 1
+                        ? 'bg-stone-200 dark:bg-stone-700'
+                        : index === 2
+                          ? 'bg-orange-100 dark:bg-orange-950/60'
+                          : 'bg-stone-100 dark:bg-stone-800'
                     }`}
                 >
                   <Text
                     className={`font-dm-extrabold text-[10px] ${index === 0
-                      ? 'text-amber-700 dark:text-amber-400'
-                      : index === 1
-                        ? 'text-stone-700 dark:text-stone-300'
-                        : index === 2
-                          ? 'text-orange-700 dark:text-orange-400'
-                          : 'text-stone-500 dark:text-stone-400'
+                        ? 'text-amber-700 dark:text-amber-400'
+                        : index === 1
+                          ? 'text-stone-700 dark:text-stone-300'
+                          : index === 2
+                            ? 'text-orange-700 dark:text-orange-400'
+                            : 'text-stone-500 dark:text-stone-400'
                       }`}
                   >
                     {index + 1}
@@ -1069,6 +1114,23 @@ const ProductSalesCard = React.memo(function ProductSalesCard({
               </View>
             );
           })}
+
+          {/* ⭐ FOOTER BUTTON — Muncul jika data > 4 */}
+          {hasMore && (
+            <Pressable
+              onPress={toggle}
+              className="flex-row items-center justify-center gap-1 border-t border-border/40 bg-muted/20 py-2.5 active:bg-muted/50 dark:border-stone-800/60 dark:bg-stone-800/20 dark:active:bg-stone-800/40"
+            >
+              <Text className="font-dm-semibold text-[11px] text-primary dark:text-sage-400">
+                {isExpanded ? 'Sembunyikan' : `Lihat ${products.length - INITIAL_COUNT} produk lainnya`}
+              </Text>
+              <Icon
+                as={isExpanded ? ChevronUp : ChevronDown}
+                size={14}
+                className="text-primary dark:text-sage-400"
+              />
+            </Pressable>
+          )}
         </View>
       )}
     </View>
@@ -1221,11 +1283,29 @@ const ProductListCard = React.memo(function ProductListCard({
   products: ApiProduct[];
 }) {
   const isEmpty = products.length === 0;
-  const preview = products.slice(0, PRODUCT_PREVIEW_LIMIT);
-  const remaining = products.length - preview.length;
+  const [isExpanded, setIsExpanded] = useState(false);
+  const INITIAL_COUNT = 5; // Batas tampilan awal
+
+  const toggle = useCallback(() => {
+    setIsExpanded((prev) => !prev);
+  }, []);
+
+  // Tentukan data yang dirender
+  const displayedProducts = isExpanded
+    ? products
+    : products.slice(0, INITIAL_COUNT);
+
+  const hasMore = products.length > INITIAL_COUNT;
+
   return (
     <View className="overflow-hidden rounded-2xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
-      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3 dark:border-stone-800/60">
+      {/* ═══ HEADER — Clickable to toggle ═══ */}
+      <Pressable
+        onPress={toggle}
+        accessibilityRole="button"
+        accessibilityLabel={isExpanded ? 'Tutup daftar produk' : 'Buka daftar produk'}
+        className="flex-row items-center justify-between px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40"
+      >
         <View className="flex-row items-center gap-2">
           <Icon
             as={StoreIcon}
@@ -1236,17 +1316,32 @@ const ProductListCard = React.memo(function ProductListCard({
             Produk di toko Anda
           </Text>
         </View>
-        {!isEmpty ? (
-          <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 dark:bg-sage-500">
-            <Text className="font-dm-bold text-[11px] text-primary-foreground">
-              {products.length}
-            </Text>
-          </View>
-        ) : null}
-      </View>
 
+        <View className="flex-row items-center gap-2">
+          {!isEmpty ? (
+            <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 dark:bg-sage-500">
+              <Text className="font-dm-bold text-[11px] text-primary-foreground">
+                {products.length}
+              </Text>
+            </View>
+          ) : null}
+          <View
+            style={{
+              transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
+            }}
+          >
+            <Icon
+              as={ChevronDown}
+              size={16}
+              className="text-muted-foreground dark:text-stone-400"
+            />
+          </View>
+        </View>
+      </Pressable>
+
+      {/* ═══ BODY ═══ */}
       {isEmpty ? (
-        <View className="items-center gap-1 px-4 py-10">
+        <View className="items-center gap-1 border-t border-border/40 px-4 py-10 dark:border-stone-800/60">
           <Text className="text-3xl">📦</Text>
           <Text className="font-dm-semibold text-sm text-foreground dark:text-stone-50">
             Belum ada produk
@@ -1256,8 +1351,8 @@ const ProductListCard = React.memo(function ProductListCard({
           </Text>
         </View>
       ) : (
-        <>
-          {preview.map((p, i) => {
+        <View className="border-t border-border/40 dark:border-stone-800/60">
+          {displayedProducts.map((p, i) => {
             const hasPromo =
               p.discount_price != null && p.minimal_discount != null;
             const displayPrice = hasPromo ? p.discount_price! : p.price;
@@ -1265,10 +1360,12 @@ const ProductListCard = React.memo(function ProductListCard({
             return (
               <View
                 key={p.id}
-                className={`flex-row items-center gap-3 px-4 py-2.5 ${i < preview.length - 1 || remaining > 0
-                  ? 'border-b border-border/30 dark:border-stone-800/40'
-                  : ''
-                  }`}
+                // ⭐ FIX: Hapus `|| hasMore` agar tidak terjadi double border dengan tombol footer
+                className={`flex-row items-center gap-3 px-4 py-2.5 ${
+                  i < displayedProducts.length - 1
+                    ? 'border-b border-border/30 dark:border-stone-800/40'
+                    : ''
+                }`}
               >
                 <ProductImage uri={p.image_url} emoji={p.emoji} size={48} />
 
@@ -1290,6 +1387,13 @@ const ProductListCard = React.memo(function ProductListCard({
                         </Text>
                       </View>
                     ) : null}
+                    {!p.is_available && (
+                      <View className="rounded bg-amber-100 px-1 py-px dark:bg-amber-950/60">
+                        <Text className="font-dm-bold text-[8px] text-amber-700 dark:text-amber-400">
+                          HABIS
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </View>
 
@@ -1307,14 +1411,25 @@ const ProductListCard = React.memo(function ProductListCard({
             );
           })}
 
-          {remaining > 0 ? (
-            <View className="bg-muted/30 px-4 py-2.5 dark:bg-stone-800/30">
-              <Text className="text-center font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
-                dan {remaining} produk lainnya
+          {/* ⭐ FOOTER BUTTON — Muncul jika data > 5 */}
+          {hasMore && (
+            <Pressable
+              onPress={toggle}
+              className="flex-row items-center justify-center gap-1 border-t border-border/40 bg-muted/20 py-2.5 active:bg-muted/50 dark:border-stone-800/60 dark:bg-stone-800/20 dark:active:bg-stone-800/40"
+            >
+              <Text className="font-dm-semibold text-[11px] text-primary dark:text-sage-400">
+                {isExpanded
+                  ? 'Sembunyikan'
+                  : `Lihat ${products.length - INITIAL_COUNT} produk lainnya`}
               </Text>
-            </View>
-          ) : null}
-        </>
+              <Icon
+                as={isExpanded ? ChevronUp : ChevronDown}
+                size={14}
+                className="text-primary dark:text-sage-400"
+              />
+            </Pressable>
+          )}
+        </View>
       )}
     </View>
   );

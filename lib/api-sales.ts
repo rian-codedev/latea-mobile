@@ -11,6 +11,15 @@ export type SaleItem = {
   line_total: number;
 };
 
+export type SalesMetrics = {
+  my_revenue: number;
+  my_transactions: number;
+  my_items_sold: number;
+  store_revenue: number;
+  store_transactions: number;
+  store_items_sold: number;
+};
+
 export type Sale = {
   id: number;
   invoice_number: string;
@@ -68,7 +77,7 @@ export async function fetchSales(params?: {
   date_from?: string;
   date_to?: string;
   page?: number;
-}): Promise<{ data: SaleListItem[]; meta: any }> {
+}): Promise<{ data: SaleListItem[]; meta: any; metrics?: SalesMetrics }> {
   const res = await api.get('/sales', { params });
   return res.data;
 }
