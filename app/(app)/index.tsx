@@ -1,72 +1,45 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  ActivityIndicator,
-  Image,
-  Modal,
-  useWindowDimensions,
-  RefreshControl,
-  AppState,
-  type AppStateStatus,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, ScrollView, RefreshControl, AppState, ActivityIndicator, Pressable, type AppStateStatus } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useColorScheme } from 'nativewind';
-import { Text } from '@/components/ui/text';
-import { Icon } from '@/components/ui/icon';
 import {
-  LogOut,
-  ShoppingCart,
-  Receipt,
   Banknote,
+  Receipt,
   Package,
-  Tag,
-  Store as StoreIcon,
-  ChevronRight,
   AlertTriangle,
-  Clock,
-  RefreshCw,
   Trash2,
-  ChevronDown,
-  ChevronUp,
-  type LucideIcon,
+  LogOut,
 } from 'lucide-react-native';
-import { useSession } from '@/lib/session';
-import { useProducts } from '@/lib/useProduct';
+import { useColorScheme } from 'nativewind';
+
+import { Text } from '@/components/ui/text';
+import { useSession } from '@/lib/stores/session';
+import { useProducts } from '@/lib/hooks/use-products';
+import { useResponsive } from '@/lib/hooks/use-responsive';
 import {
   fetchSales,
   fetchSaleDetail,
   fetchProductSummary,
   deleteSale,
-  type Sale,
-  type SaleListItem,
-  type ProductSummaryItem,
-} from '@/lib/api-sales';
-import { ReceiptModal } from '@/lib/receipt-modal';
-import type { ApiProduct } from '@/lib/api-products';
-import { formatRupiah } from '@/lib/format';
+  type ServerTime,
+} from '@/lib/api/sales';
+import { formatRupiah } from '@/lib/utils/format';
+import { ROUTES } from '@/lib/constants/app';
+import { HEADER_HEIGHT } from '@/lib/theme/sizing';
 
-/* ══════════════════════════════════════════════════════
-   Konstanta
-   ══════════════════════════════════════════════════════ */
-const HEADER_HEIGHT = 60;
-const RECENT_ITEM_HEIGHT = 62;
-const RECENT_VISIBLE_ITEMS = 5;
-const RECENT_MAX_HEIGHT = RECENT_ITEM_HEIGHT * RECENT_VISIBLE_ITEMS;
+import { Screen } from '@/components/layout/screen';
+import { LoadingScreen } from '@/components/feedback/loading-screen';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
+import { BaseModal } from '@/components/ui/base-modal';
+import { DashboardHeader } from '@/components/features/dashboard/dashboard-header';
+import { StartCard } from '@/components/features/dashboard/start-card';
+import { StatCard } from '@/components/features/dashboard/stat-card';
+import { ProductSalesCard } from '@/components/features/dashboard/product-sales';
+import { RecentCard } from '@/components/features/dashboard/recent-card';
+import { ProductListCard } from '@/components/features/dashboard/product-list-card';
+import { ReceiptModal } from '@/components/features/sales/receipt-modal';
 
-const WELCOME_GRADIENT_A = ['#EEF5F0', '#DCEBE1', '#CBDFD3'] as const;
-const WELCOME_GRADIENT_B = ['#E9F1F4', '#D8E6EC', '#E4EEE7'] as const;
-
-const WELCOME_GRADIENT_A_DARK = ['#0F1F17', '#0A1712', '#071210'] as const;
-const WELCOME_GRADIENT_B_DARK = ['#0A1418', '#091418', '#0A1712'] as const;
-
-/* ── Helper ── */
 function getGreeting() {
   const h = new Date().getHours();
   if (h < 11) return 'Selamat pagi';
@@ -75,79 +48,59 @@ function getGreeting() {
   return 'Selamat malam';
 }
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('id-ID', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-}
-
-/* ══════════════════════════════════════════════════════
-   Dashboard Screen
-   ══════════════════════════════════════════════════════ */
 export default function DashboardScreen() {
-  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { isWide } = useResponsive();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
   const queryClient = useQueryClient();
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const { user, signOut } = useSession();
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedSaleId, setSelectedSaleId] = useState<number | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [now, setNow] = useState(new Date());
 
-  const isWide = width >= 900;
   const storeId = user?.store_id;
-
   const cashierName = user?.name ?? 'Kasir';
   const storeName = user?.store?.name ?? 'Toko';
   const initial = cashierName.charAt(0).toUpperCase() || 'K';
 
-  // ⭐ FIX: State waktu HP sebagai cadangan (fallback)
-  const [now, setNow] = useState(new Date());
-
   useEffect(() => {
-    // Timer untuk update jam HP setiap menit (jika server_time tidak ada)
-    const timer = setInterval(() => setNow(new Date()), 60000);
-    return () => clearInterval(timer);
+    const t = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(t);
   }, []);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener(
-      'change',
-      (nextState: AppStateStatus) => {
-        if (nextState === 'active') {
-          queryClient.invalidateQueries({ queryKey: ['sales'] });
-        }
-      }
-    );
-    return () => subscription.remove();
+    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
+      if (s === 'active') queryClient.invalidateQueries({ queryKey: ['sales'] });
+    });
+    return () => sub.remove();
   }, [queryClient]);
 
   const { data: products = [] } = useProducts(storeId);
 
   const activeProducts = useMemo(
     () => products.filter((p) => p.is_active).length,
-    [products]
+    [products],
   );
   const promoProducts = useMemo(
     () =>
       products.filter(
-        (p) =>
-          p.is_active &&
-          p.discount_price != null &&
-          p.minimal_discount != null
+        (p) => p.is_active && p.discount_price != null && p.minimal_discount != null,
       ).length,
-    [products]
+    [products],
   );
 
   const { data: salesToday, isLoading: isLoadingSales } = useQuery({
     queryKey: ['sales', 'today', storeId],
-    queryFn: () => fetchSales(), 
+    queryFn: fetchSales,
     enabled: !!storeId,
     staleTime: 0,
-    refetchInterval: 60000, 
+    refetchInterval: 60000,
   });
 
   const { data: productSummary = [] } = useQuery({
@@ -155,21 +108,24 @@ export default function DashboardScreen() {
     queryFn: () => fetchProductSummary(),
     enabled: !!storeId,
     staleTime: 0,
-    refetchInterval: 60000, 
+    refetchInterval: 60000,
   });
 
-  // ⭐ FIX: Ambil dari server, jika tidak ada pakai waktu HP
-  const serverTime = salesToday?.meta?.server_time;
-  
-  const timeLabel = serverTime?.time ?? now.toLocaleTimeString('id-ID', {
-    hour: '2-digit', minute: '2-digit', hour12: false
-  });
-  
-  const dateFullLabel = serverTime?.date_full ?? now.toLocaleDateString('id-ID', {
-    weekday: 'long', day: 'numeric', month: 'long'
-  });
-  
-  const dayLabel = ''; 
+  const serverTime = salesToday?.meta?.server_time as ServerTime | undefined;
+  const timeLabel =
+    serverTime?.time ??
+    now.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  const dateFullLabel =
+    serverTime?.date_full ??
+    now.toLocaleDateString('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
 
   const todayStats = useMemo(() => {
     if (salesToday?.metrics) {
@@ -187,14 +143,10 @@ export default function DashboardScreen() {
     };
   }, [salesToday]);
 
-  const recent = useMemo(() => {
-    const list = salesToday?.data ?? [];
-    return list.filter((s) => s.status === 'completed');
-  }, [salesToday]);
-
-  const [selectedSaleId, setSelectedSaleId] = useState<number | null>(null);
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const recent = useMemo(
+    () => (salesToday?.data ?? []).filter((s) => s.status === 'completed'),
+    [salesToday],
+  );
 
   const {
     data: saleDetail,
@@ -212,46 +164,19 @@ export default function DashboardScreen() {
 
   const canModifySale = useMemo(() => {
     if (!saleDetail) return false;
-    const saleDate = new Date(saleDetail.sale_date);
-    const today = new Date();
-    const isToday = saleDate.toDateString() === today.toDateString();
-    return isToday && saleDetail.status === 'completed';
+    const today = new Date().toDateString();
+    return (
+      new Date(saleDetail.sale_date).toDateString() === today &&
+      saleDetail.status === 'completed'
+    );
   }, [saleDetail]);
 
-  const handleSalePress = useCallback((saleId: number) => {
-    setSelectedSaleId(saleId);
-  }, []);
-
-  const closeDetail = useCallback(() => {
-    setSelectedSaleId(null);
-  }, []);
-
-  const openCashier = useCallback(() => {
-    router.push('/(app)/cashier');
-  }, []);
-
-  const requestLogout = useCallback(() => {
-    setLogoutConfirmOpen(true);
-  }, []);
-
-  const handleDelete = useCallback(() => {
-    setDeleteConfirmOpen(true);
-  }, []);
-
-  const cancelDelete = useCallback(() => {
-    if (isDeleting) return;
-    setDeleteConfirmOpen(false);
-  }, [isDeleting]);
-
-  const cancelLogout = useCallback(() => {
-    if (isLoggingOut) return;
-    setLogoutConfirmOpen(false);
-  }, [isLoggingOut]);
+  const closeDetail = useCallback(() => setSelectedSaleId(null), []);
 
   const handleEdit = useCallback(() => {
     if (!selectedSaleId) return;
     closeDetail();
-    router.push(`/(app)/cashier?editSaleId=${selectedSaleId}`);
+    router.push(ROUTES.cashierEdit(selectedSaleId));
   }, [selectedSaleId, closeDetail]);
 
   const confirmDelete = useCallback(async () => {
@@ -262,8 +187,6 @@ export default function DashboardScreen() {
       await queryClient.invalidateQueries({ queryKey: ['sales'] });
       setDeleteConfirmOpen(false);
       closeDetail();
-    } catch (e) {
-      console.log('[Dashboard] Delete failed:', e);
     } finally {
       setIsDeleting(false);
     }
@@ -275,8 +198,6 @@ export default function DashboardScreen() {
     try {
       await queryClient.invalidateQueries({ queryKey: ['sales'] });
       await queryClient.refetchQueries({ queryKey: ['products', storeId] });
-    } catch (e) {
-      console.warn('[Dashboard] Refresh failed:', e);
     } finally {
       setIsRefreshing(false);
     }
@@ -293,43 +214,19 @@ export default function DashboardScreen() {
     }
   }, [signOut, isLoggingOut]);
 
-  const scrollContentStyle = useMemo(
-    () => ({
-      paddingTop: insets.top + HEADER_HEIGHT + 16,
-      paddingBottom: insets.bottom + 24,
-      paddingHorizontal: 16,
-    }),
-    [insets.top, insets.bottom]
-  );
-
-  const headerBlurStyle = useMemo(
-    () => ({
-      position: 'absolute' as const,
-      top: 0,
-      left: 0,
-      right: 0,
-      paddingTop: insets.top,
-    }),
-    [insets.top]
-  );
-
-  // ⭐ Tampilkan loading layar penuh di awal buka aplikasi (agar tidak terlihat "Memuat..." di header)
   if (isLoadingSales && !!storeId) {
-    return (
-      <View className="flex-1 items-center justify-center bg-white dark:bg-stone-950">
-        <ActivityIndicator size="large" color={isDark ? '#A3C9A8' : '#84A98C'} />
-        <Text className="mt-4 font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-          Memuat data dashboard...
-        </Text>
-      </View>
-    );
+    return <LoadingScreen message="Memuat data dashboard..." />;
   }
 
   return (
-    <View className="flex-1 bg-white dark:bg-stone-950">
+    <Screen>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={scrollContentStyle}
+        contentContainerStyle={{
+          paddingTop: insets.top + HEADER_HEIGHT + 16,
+          paddingBottom: insets.bottom + 24,
+          paddingHorizontal: 16,
+        }}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -340,16 +237,14 @@ export default function DashboardScreen() {
         }
       >
         <View className={isWide ? 'flex-row items-start gap-4' : 'gap-4'}>
-          {/* ═══ KOLOM KIRI ═══ */}
           <View className={isWide ? 'flex-[3] gap-4' : 'gap-4'}>
             <StartCard
-              onPress={openCashier}
+              onPress={() => router.push(ROUTES.cashier)}
               storeName={storeName}
               activeProducts={activeProducts}
               promoProducts={promoProducts}
               large={isWide}
             />
-
             <View className="flex-row flex-wrap gap-3">
               <StatCard
                 icon={Banknote}
@@ -371,806 +266,108 @@ export default function DashboardScreen() {
             <ProductSalesCard products={productSummary} />
           </View>
 
-          {/* ═══ KOLOM KANAN ═══ */}
           <View className={isWide ? 'flex-[2] gap-4' : 'gap-4'}>
-            <RecentCard sales={recent} onSalePress={handleSalePress} />
+            <RecentCard sales={recent} onSalePress={setSelectedSaleId} />
             <ProductListCard products={products} />
           </View>
         </View>
       </ScrollView>
 
-      {/* ══ GLASS HEADER ══ */}
-      <BlurView
-        intensity={70}
-        tint={isDark ? 'dark' : 'light'}
-        style={headerBlurStyle}
-        className="overflow-hidden"
-      >
-        <View className="absolute bottom-0 left-0 right-0 h-px bg-border/40 dark:bg-stone-800/60" />
+      <DashboardHeader
+        initial={initial}
+        greeting={getGreeting()}
+        name={cashierName}
+        time={timeLabel}
+        fullDate={dateFullLabel}
+        expanded={isWide}
+        isRefreshing={isRefreshing}
+        onRefresh={refreshAll}
+        onLogout={() => setLogoutConfirmOpen(true)}
+      />
 
-        <View
-          style={{ height: HEADER_HEIGHT }}
-          className="flex-row items-center gap-3 px-4"
-        >
-          <View className="size-10 items-center justify-center rounded-full bg-primary dark:bg-sage-500">
-            <Text className="font-dm-extrabold text-sm text-primary-foreground">
-              {initial}
-            </Text>
-          </View>
-
-          <View className="flex-1">
-            <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-              {getGreeting()}
-            </Text>
-            <Text
-              className="font-dm-bold text-base leading-tight text-foreground dark:text-stone-50"
-              numberOfLines={1}
-            >
-              {cashierName}
-            </Text>
-          </View>
-
-          <DateTimePill
-            time={timeLabel}
-            dayLabel={dayLabel}
-            fullDate={dateFullLabel}
-            expanded={isWide}
-          />
-          
-          <Pressable
-            onPress={refreshAll}
-            disabled={isRefreshing}
-            hitSlop={8}
-            accessibilityLabel="Refresh data"
-            className="size-10 items-center justify-center rounded-full active:bg-muted/60 dark:active:bg-stone-800/60"
-          >
-            {isRefreshing ? (
-              <ActivityIndicator
-                size="small"
-                color={isDark ? '#A3C9A8' : '#84A98C'}
-              />
-            ) : (
-              <Icon
-                as={RefreshCw}
-                size={17}
-                className="text-muted-foreground dark:text-stone-400"
-              />
-            )}
-          </Pressable>
-
-          <Pressable
-            onPress={requestLogout}
-            hitSlop={8}
-            accessibilityLabel="Keluar"
-            className="size-10 items-center justify-center rounded-full active:bg-muted/60 dark:active:bg-stone-800/60"
-          >
-            <Icon
-              as={LogOut}
-              size={18}
-              className="text-muted-foreground dark:text-stone-400"
-            />
-          </Pressable>
-        </View>
-      </BlurView>
-
-      {/* ══ DETAIL SALE MODAL — LOADING / ERROR ══ */}
-      <Modal
+      {/* Detail — loading/error modal */}
+      <BaseModal
         visible={!!selectedSaleId && (isLoadingDetail || isDetailError)}
-        transparent
-        animationType="fade"
-        onRequestClose={closeDetail}
-      >
-        <View className="flex-1 items-center justify-center bg-black/40 px-6">
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeDetail} />
-          <View className="w-full max-w-[320px] items-center gap-3 rounded-2xl bg-white p-6 dark:bg-stone-900">
-            {isLoadingDetail ? (
-              <>
-                <ActivityIndicator size="large" />
-                <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-                  Memuat detail transaksi...
-                </Text>
-              </>
-            ) : (
-              <>
-                <View className="size-12 items-center justify-center rounded-full bg-destructive/10 dark:bg-red-500/15">
-                  <Icon as={AlertTriangle} size={22} className="text-destructive dark:text-red-400" />
-                </View>
-                <Text className="text-center font-dm-bold text-sm text-foreground dark:text-stone-50">
-                  Gagal memuat transaksi
-                </Text>
-                <Text className="text-center font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-                  {detailError instanceof Error ? detailError.message : 'Silakan coba lagi.'}
-                </Text>
-                <View className="mt-1 flex-row gap-2">
-                  <Pressable
-                    onPress={closeDetail}
-                    className="h-10 flex-1 items-center justify-center rounded-full border border-border/60 bg-white active:opacity-80 dark:border-stone-700/60 dark:bg-stone-900"
-                  >
-                    <Text className="font-dm-bold text-xs text-foreground dark:text-stone-50">
-                      Tutup
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => refetchDetail()}
-                    className="h-10 flex-1 items-center justify-center rounded-full bg-primary active:opacity-90 dark:bg-sage-500"
-                  >
-                    <Text className="font-dm-bold text-xs text-primary-foreground">
-                      Coba Lagi
-                    </Text>
-                  </Pressable>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* ══ DETAIL SALE MODAL — RECEIPT ══ */}
-      <ReceiptModal
-        sale={saleDetail ?? null}
-        visible={!!selectedSaleId && !!saleDetail && !isLoadingDetail && !isDetailError}
         onClose={closeDetail}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        canModify={canModifySale}
-      />
-
-      {/* ══ LOGOUT CONFIRMATION MODAL ══ */}
-      <LogoutConfirmModal
-        visible={logoutConfirmOpen}
-        isLoading={isLoggingOut}
-        onConfirm={confirmLogout}
-        onCancel={cancelLogout}
-      />
-
-      {/* ⭐ DELETE CONFIRMATION MODAL */}
-      <Modal
-        visible={deleteConfirmOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={cancelDelete}
       >
-        <View className="flex-1 items-center justify-center bg-black/40 px-6">
-          <Pressable style={StyleSheet.absoluteFill} onPress={cancelDelete} disabled={isDeleting} />
-          <View style={{ width: '100%', maxWidth: 360 }} className="overflow-hidden rounded-3xl bg-white dark:bg-stone-900">
-            <View className="items-center gap-3 px-6 pt-6">
-              <View className="size-14 items-center justify-center rounded-full bg-red-500/10 dark:bg-red-500/15">
-                <Icon as={Trash2} size={26} className="text-red-600 dark:text-red-400" />
-              </View>
-              <View className="items-center gap-1">
-                <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
-                  Hapus transaksi ini?
-                </Text>
-                <Text className="text-center font-dm-regular text-xs leading-4 text-muted-foreground dark:text-stone-400">
-                  Transaksi {saleDetail?.invoice_number} akan dibatalkan. Tindakan ini tidak dapat dibatalkan.
-                </Text>
-              </View>
-            </View>
-            <View className="mt-6 flex-row gap-2 border-t border-border/40 bg-muted/30 p-4 dark:border-stone-800/60 dark:bg-stone-800/30">
-              <Pressable
-                onPress={cancelDelete}
-                disabled={isDeleting}
-                className="h-11 flex-1 items-center justify-center rounded-full border border-border/60 bg-white active:opacity-80 dark:border-stone-700/60 dark:bg-stone-900"
-              >
-                <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
-                  Batal
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={confirmDelete}
-                disabled={isDeleting}
-                className={isDeleting ? 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-red-500/60 dark:bg-red-500/50' : 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-red-500 active:opacity-90 dark:bg-red-500'}
-              >
-                {isDeleting ? (
-                  <>
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                    <Text className="font-dm-bold text-sm text-white">Menghapus...</Text>
-                  </>
-                ) : (
-                  <>
-                    <Icon as={Trash2} size={15} className="text-white" />
-                    <Text className="font-dm-bold text-sm text-white">Hapus</Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
-}
-
-/* ══════════════════════════════════════════════════════
-   DateTime Pill
-   ══════════════════════════════════════════════════════ */
-const DateTimePill = React.memo(function DateTimePill({
-  time,
-  dayLabel,
-  fullDate,
-  expanded,
-}: {
-  time: string;
-  dayLabel: string;
-  fullDate: string;
-  expanded: boolean;
-}) {
-  if (!expanded) {
-    return (
-      <View className="flex-row items-center gap-1.5 rounded-full border border-border/40 bg-white/70 px-2.5 py-1.5 dark:border-stone-800/60 dark:bg-stone-900/70">
-        <View className="size-1.5 rounded-full bg-primary dark:bg-sage-400" />
-        <Text className="font-mono text-[11px] font-bold tracking-tight text-foreground dark:text-stone-50">
-          {time}
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <View className="flex-row items-center gap-2 rounded-full border border-border/40 bg-white/70 px-3 py-1.5 dark:border-stone-800/60 dark:bg-stone-900/70">
-      <Icon as={Clock} size={11} className="text-primary dark:text-sage-400" />
-      <Text className="font-mono text-[11px] font-bold tracking-tight text-foreground dark:text-stone-50">
-        {time}
-      </Text>
-      <View className="h-3 w-px bg-border/60 dark:bg-stone-700/60" />
-      <Text className="font-dm-medium text-[10.5px] text-muted-foreground dark:text-stone-400">
-        {fullDate}
-      </Text>
-    </View>
-  );
-});
-
-/* ══════════════════════════════════════════════════════
-   Logout Confirmation Modal
-   ══════════════════════════════════════════════════════ */
-const LogoutConfirmModal = React.memo(function LogoutConfirmModal({
-  visible,
-  isLoading,
-  onConfirm,
-  onCancel,
-}: {
-  visible: boolean;
-  isLoading: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View className="flex-1 items-center justify-center bg-black/40 px-6">
-        <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} disabled={isLoading} />
-        <View style={{ width: '100%', maxWidth: 360 }} className="overflow-hidden rounded-3xl bg-white dark:bg-stone-900">
-          <View className="items-center gap-3 px-6 pt-6">
-            <View className="size-14 items-center justify-center rounded-full bg-destructive/10 dark:bg-red-500/15">
-              <Icon as={AlertTriangle} size={26} className="text-destructive dark:text-red-400" />
-            </View>
-            <View className="items-center gap-1">
-              <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
-                Keluar dari aplikasi?
-              </Text>
-              <Text className="text-center font-dm-regular text-xs leading-4 text-muted-foreground dark:text-stone-400">
-                Anda harus login kembali untuk melanjutkan transaksi.
-              </Text>
-            </View>
-          </View>
-          <View className="mt-6 flex-row gap-2 border-t border-border/40 bg-muted/30 p-4 dark:border-stone-800/60 dark:bg-stone-800/30">
-            <Pressable
-              onPress={onCancel}
-              disabled={isLoading}
-              className="h-11 flex-1 items-center justify-center rounded-full border border-border/60 bg-white active:opacity-80 dark:border-stone-700/60 dark:bg-stone-900"
-            >
-              <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">Batal</Text>
-            </Pressable>
-            <Pressable
-              onPress={onConfirm}
-              disabled={isLoading}
-              className={isLoading ? 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-destructive/60 dark:bg-red-500/50' : 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-destructive active:opacity-90 dark:bg-red-500'}
-            >
-              {isLoading ? (
-                <>
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                  <Text className="font-dm-bold text-sm text-white">Keluar...</Text>
-                </>
-              ) : (
-                <>
-                  <Icon as={LogOut} size={15} className="text-white" />
-                  <Text className="font-dm-bold text-sm text-white">Keluar</Text>
-                </>
-              )}
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-});
-
-/* ══════════════════════════════════════════════════════
-   Start Card
-   ══════════════════════════════════════════════════════ */
-const StartCard = React.memo(function StartCard({
-  onPress,
-  storeName,
-  activeProducts,
-  promoProducts,
-  large,
-}: {
-  onPress: () => void;
-  storeName: string;
-  activeProducts: number;
-  promoProducts: number;
-  large?: boolean;
-}) {
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
-
-  const gradientA = isDark ? WELCOME_GRADIENT_A_DARK : WELCOME_GRADIENT_A;
-  const gradientB = isDark ? WELCOME_GRADIENT_B_DARK : WELCOME_GRADIENT_B;
-
-  const pressStyle = useCallback(
-    ({ pressed }: { pressed: boolean }) => ({
-      transform: [{ scale: pressed ? 0.97 : 1 }],
-    }),
-    []
-  );
-
-  return (
-    <View className={`overflow-hidden rounded-3xl border border-border/40 dark:border-stone-800/60 ${large ? 'p-8' : 'p-6'}`}>
-      <LinearGradient colors={gradientA} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <LinearGradient colors={gradientB} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { opacity: 0.55 }]} />
-
-      <View className="absolute -right-20 -top-20 size-64 rounded-full" style={{ backgroundColor: isDark ? 'rgba(132,169,140,0.06)' : 'rgba(255,255,255,0.4)' }} />
-      <View className="absolute -bottom-24 right-16 size-48 rounded-full" style={{ backgroundColor: isDark ? 'rgba(132,169,140,0.04)' : 'rgba(255,255,255,0.2)' }} />
-
-      <View className="relative">
-        <Text className="font-dm-medium text-xs text-muted-foreground dark:text-stone-400">
-          {storeName}
-        </Text>
-        <Text className={`mt-1 font-dm-extrabold tracking-tight text-foreground dark:text-stone-50 ${large ? 'text-4xl' : 'text-3xl'}`}>
-          Mulai transaksi
-        </Text>
-        <Text className="mt-1.5 max-w-[360px] font-dm-regular text-sm leading-5 text-muted-foreground dark:text-stone-400">
-          Pilih produk, hitung total, lalu terima pembayaran.
-        </Text>
-
-        <View className="mt-6 flex-row flex-wrap items-center gap-3">
-          <Pressable
-            onPress={onPress}
-            accessibilityRole="button"
-            accessibilityLabel="Mulai transaksi"
-            style={pressStyle}
-            className="h-12 flex-row items-center gap-2 rounded-full bg-primary px-5 active:opacity-90 dark:bg-sage-500"
-          >
-            <Icon as={ShoppingCart} size={17} className="text-primary-foreground" />
-            <Text className="font-dm-bold text-sm text-primary-foreground">Buka kasir</Text>
-          </Pressable>
-
-          {/* ⭐ Hapus width-auto */}
-          <View className="flex-row items-center gap-2">
-            <Pill icon={Package} text={`${activeProducts} produk`} />
-            {promoProducts > 0 ? (
-              <Pill icon={Tag} text={`${promoProducts} promo`} />
-            ) : null}
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-});
-
-/* ══════════════════════════════════════════════════════
-   Pill
-   ══════════════════════════════════════════════════════ */
-const Pill = React.memo(function Pill({
-  icon,
-  text,
-}: {
-  icon: LucideIcon;
-  text: string;
-}) {
-  return (
-    <View className="flex-shrink-0 h-8 flex-row items-center gap-1.5 rounded-full border border-border/40 bg-white/70 px-3 dark:border-stone-800/60 dark:bg-stone-900/70">
-      <Icon as={icon} size={13} className="text-primary dark:text-sage-400" />
-      <Text className="font-dm-medium text-xs text-foreground dark:text-stone-50" numberOfLines={1}>
-        {text}
-      </Text>
-    </View>
-  );
-});
-
-/* ══════════════════════════════════════════════════════
-   Stat Card
-   ══════════════════════════════════════════════════════ */
-const StatCard = React.memo(function StatCard({
-  icon,
-  label,
-  value,
-  wide,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-  wide?: boolean;
-}) {
-  return (
-    <View className={`min-w-[140px] gap-3 rounded-2xl border border-border/40 bg-white p-4 dark:border-stone-800/60 dark:bg-stone-900 ${wide ? 'w-full' : 'flex-1'}`}>
-      <View className="size-9 items-center justify-center rounded-xl bg-accent/60 dark:bg-stone-800">
-        <Icon as={icon} size={17} className="text-primary dark:text-sage-400" />
-      </View>
-      <View className="gap-0.5">
-        <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-          {label}
-        </Text>
-        <Text
-          className="font-dm-extrabold text-2xl leading-tight tracking-tight text-foreground dark:text-stone-50"
-          numberOfLines={1}
-          adjustsFontSizeToFit
-        >
-          {value}
-        </Text>
-      </View>
-    </View>
-  );
-});
-
-/* ══════════════════════════════════════════════════════
-   Product Sales Card (Collapsible)
-   ══════════════════════════════════════════════════════ */
-const ProductSalesCard = React.memo(function ProductSalesCard({
-  products,
-}: {
-  products: ProductSummaryItem[];
-}) {
-  const isEmpty = products.length === 0;
-  const [isExpanded, setIsExpanded] = useState(false);
-  const INITIAL_COUNT = 4;
-
-  const toggle = useCallback(() => {
-    setIsExpanded((prev) => !prev);
-  }, []);
-
-  const maxQty = useMemo(
-    () => Math.max(...products.map((p) => Number(p.total_qty)), 1),
-    [products]
-  );
-
-  const displayedProducts = isExpanded
-    ? products
-    : products.slice(0, INITIAL_COUNT);
-
-  const hasMore = products.length > INITIAL_COUNT;
-
-  return (
-    <View className="overflow-hidden rounded-xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
-      <Pressable
-        onPress={toggle}
-        accessibilityRole="button"
-        accessibilityLabel={isExpanded ? 'Tutup daftar produk terjual' : 'Buka daftar produk terjual'}
-        className="flex-row items-center justify-between border-b border-border/40 px-4 py-3 active:bg-muted/40 dark:border-stone-800/60 dark:active:bg-stone-800/40"
-      >
-        <View className="flex-row items-center gap-2.5">
-          <View className="size-7 items-center justify-center rounded-lg bg-primary/10 dark:bg-sage-500/15">
-            <Icon as={Package} size={14} className="text-primary dark:text-sage-400" />
-          </View>
-          <View>
-            <Text className="font-dm-bold text-xs text-foreground dark:text-stone-50">
-              Produk Terjual
-            </Text>
-            <Text className="font-dm-regular text-[10px] text-muted-foreground dark:text-stone-400">
-              Terurut dari yang paling banyak
-            </Text>
-          </View>
-        </View>
-
-        <View className="flex-row items-center gap-2">
-          <View className="rounded-full bg-muted px-2 py-0.5 dark:bg-stone-800">
-            <Text className="font-mono text-[10px] font-bold text-muted-foreground dark:text-stone-400">
-              {products.length}
-            </Text>
-          </View>
-          <View style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }}>
-            <Icon as={ChevronDown} size={16} className="text-muted-foreground dark:text-stone-400" />
-          </View>
-        </View>
-      </Pressable>
-
-      {isEmpty ? (
-        <View className="items-center gap-2 px-4 py-10">
-          <Text className="text-3xl">📊</Text>
-          <Text className="text-center font-dm-medium text-xs text-muted-foreground dark:text-stone-400">
-            Belum ada produk terjual hari ini
-          </Text>
-        </View>
-      ) : (
-        <View>
-          {displayedProducts.map((product, index) => {
-            const qty = Number(product.total_qty);
-            const percentage = (qty / maxQty) * 100;
-
-            return (
-              <View
-                key={product.product_id}
-                className={`flex-row items-center gap-3 px-4 py-2.5 ${index < displayedProducts.length - 1 ? 'border-b border-border/30 dark:border-stone-800/40' : ''}`}
-              >
-                <View className={`size-6 shrink-0 items-center justify-center rounded-full ${index === 0 ? 'bg-amber-100 dark:bg-amber-950/60' : index === 1 ? 'bg-stone-200 dark:bg-stone-700' : index === 2 ? 'bg-orange-100 dark:bg-orange-950/60' : 'bg-stone-100 dark:bg-stone-800'}`}>
-                  <Text className={`font-dm-extrabold text-[10px] ${index === 0 ? 'text-amber-700 dark:text-amber-400' : index === 1 ? 'text-stone-700 dark:text-stone-300' : index === 2 ? 'text-orange-700 dark:text-orange-400' : 'text-stone-500 dark:text-stone-400'}`}>
-                    {index + 1}
-                  </Text>
-                </View>
-
-                <View className="min-w-0 flex-1">
-                  <View className="flex-row items-center justify-between gap-2">
-                    <Text className="flex-1 truncate font-dm-medium text-[11px] text-foreground dark:text-stone-50" numberOfLines={1}>
-                      {product.product_name}
-                    </Text>
-                    <Text className="shrink-0 font-mono text-[11px] font-bold text-foreground dark:text-stone-50">
-                      {qty} pcs
-                    </Text>
-                  </View>
-
-                  <View className="mt-1 flex-row items-center gap-2">
-                    <View className="h-1 flex-1 overflow-hidden rounded-full bg-muted dark:bg-stone-800">
-                      <View style={{ width: `${percentage}%` }} className="h-full rounded-full bg-primary dark:bg-sage-400" />
-                    </View>
-                    <Text className="shrink-0 font-mono text-[10px] text-muted-foreground dark:text-stone-400">
-                      Rp {Number(product.total_revenue).toLocaleString('id-ID')}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            );
-          })}
-
-          {hasMore && (
-            <Pressable
-              onPress={toggle}
-              className="flex-row items-center justify-center gap-1 border-t border-border/40 bg-muted/20 py-2.5 active:bg-muted/50 dark:border-stone-800/60 dark:bg-stone-800/20 dark:active:bg-stone-800/40"
-            >
-              <Text className="font-dm-semibold text-[11px] text-primary dark:text-sage-400">
-                {isExpanded ? 'Sembunyikan' : `Lihat ${products.length - INITIAL_COUNT} produk lainnya`}
-              </Text>
-              <Icon as={isExpanded ? ChevronUp : ChevronDown} size={14} className="text-primary dark:text-sage-400" />
-            </Pressable>
-          )}
-        </View>
-      )}
-    </View>
-  );
-});
-
-/* ══════════════════════════════════════════════════════
-   Recent Card
-   ══════════════════════════════════════════════════════ */
-const RecentCard = React.memo(function RecentCard({
-  sales,
-  onSalePress,
-}: {
-  sales: SaleListItem[];
-  onSalePress: (saleId: number) => void;
-}) {
-  const isEmpty = sales.length === 0;
-  const hasMore = sales.length > RECENT_VISIBLE_ITEMS;
-
-  return (
-    <View className="overflow-hidden rounded-2xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
-      <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3 dark:border-stone-800/60">
-        <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
-          Transaksi hari ini
-        </Text>
-        {!isEmpty ? (
-          <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 dark:bg-sage-500">
-            <Text className="font-dm-bold text-[11px] text-primary-foreground">
-              {sales.length}
+        {isLoadingDetail ? (
+          <View className="w-full max-w-[320px] items-center gap-3 rounded-2xl bg-white p-6 dark:bg-stone-900">
+            <ActivityIndicator size="large" />
+            <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
+              Memuat detail transaksi...
             </Text>
           </View>
         ) : (
-          <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">—</Text>
-        )}
-      </View>
-
-      {isEmpty ? (
-        <View className="items-center gap-1 px-4 py-10">
-          <Text className="text-3xl">🧾</Text>
-          <Text className="font-dm-semibold text-sm text-foreground dark:text-stone-50">
-            Belum ada transaksi
-          </Text>
-          <Text className="text-center font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-            Transaksi hari ini akan muncul di sini
-          </Text>
-        </View>
-      ) : (
-        <ScrollView style={{ maxHeight: RECENT_MAX_HEIGHT }} showsVerticalScrollIndicator={hasMore} nestedScrollEnabled bounces={false}>
-          {sales.map((t, i) => {
-            const shortId = t.invoice_number.split('-').pop() ?? t.invoice_number;
-            return (
+          <View className="w-full max-w-[320px] items-center gap-3 rounded-2xl bg-white p-6 dark:bg-stone-900">
+            <View className="size-12 items-center justify-center rounded-full bg-destructive/10 dark:bg-red-500/15">
+              <AlertTriangle size={22} className="text-destructive dark:text-red-400" />
+            </View>
+            <Text className="text-center font-dm-bold text-sm text-foreground dark:text-stone-50">
+              Gagal memuat transaksi
+            </Text>
+            <Text className="text-center font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
+              {detailError instanceof Error
+                ? detailError.message
+                : 'Silakan coba lagi.'}
+            </Text>
+            <View className="mt-1 flex-row gap-2">
               <Pressable
-                key={t.id}
-                onPress={() => onSalePress(t.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`Lihat detail transaksi ${t.invoice_number}`}
-                className={`flex-row items-center gap-3 px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${i < sales.length - 1 ? 'border-b border-border/30 dark:border-stone-800/40' : ''}`}
+                onPress={closeDetail}
+                className="h-10 flex-1 items-center justify-center rounded-full border border-border/60 bg-white active:opacity-80 dark:border-stone-700/60 dark:bg-stone-900"
               >
-                <View className="size-10 items-center justify-center rounded-full bg-accent/60 dark:bg-stone-800">
-                  <Icon as={Receipt} size={16} className="text-primary dark:text-sage-400" />
-                </View>
-                <View className="flex-1">
-                  <Text className="font-dm-semibold text-[13px] text-foreground dark:text-stone-50">
-                    #{shortId}
-                  </Text>
-                  <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-                    {formatTime(t.sale_date)} WIB, {t.items_count} item
-                  </Text>
-                </View>
-                <Text className="font-dm-bold text-[13px] text-foreground dark:text-stone-50">
-                  {formatRupiah(t.total)}
+                <Text className="font-dm-bold text-xs text-foreground dark:text-stone-50">
+                  Tutup
                 </Text>
-                <Icon as={ChevronRight} size={15} className="text-muted-foreground/60 dark:text-stone-500/60" />
               </Pressable>
-            );
-          })}
-        </ScrollView>
-      )}
+              <Pressable
+                onPress={() => refetchDetail()}
+                className="h-10 flex-1 items-center justify-center rounded-full bg-primary active:opacity-90 dark:bg-sage-500"
+              >
+                <Text className="font-dm-bold text-xs text-primary-foreground">
+                  Coba Lagi
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+      </BaseModal>
 
-      {hasMore ? (
-        <View className="border-t border-border/40 bg-muted/30 px-4 py-2 dark:border-stone-800/60 dark:bg-stone-800/30">
-          <Text className="text-center font-dm-regular text-[10.5px] text-muted-foreground dark:text-stone-400">
-            Scroll untuk melihat {sales.length - RECENT_VISIBLE_ITEMS} lainnya
-          </Text>
-        </View>
-      ) : null}
-    </View>
-  );
-});
+      <ReceiptModal
+        sale={saleDetail ?? null}
+        visible={
+          !!selectedSaleId && !!saleDetail && !isLoadingDetail && !isDetailError
+        }
+        onClose={closeDetail}
+        onEdit={handleEdit}
+        onDelete={() => setDeleteConfirmOpen(true)}
+        canModify={canModifySale}
+      />
 
-function ProductImage({
-  uri,
-  emoji,
-  size = 48,
-}: {
-  uri: string | null;
-  emoji: string | null;
-  size?: number;
-}) {
-  const [failed, setFailed] = React.useState(false);
+      <ConfirmModal
+        visible={deleteConfirmOpen}
+        icon={Trash2}
+        title="Hapus transaksi ini?"
+        description={`Transaksi ${saleDetail?.invoice_number} akan dibatalkan. Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel="Hapus"
+        loadingLabel="Menghapus..."
+        variant="danger"
+        isLoading={isDeleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
 
-  const showImage = uri && !failed;
-  return (
-    <View
-      style={{ width: size, height: size }}
-      className="items-center justify-center overflow-hidden rounded-xl border border-border/40 bg-accent/60 dark:border-stone-800/60 dark:bg-stone-800"
-    >
-      {showImage ? (
-        <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" onError={() => setFailed(true)} />
-      ) : (
-        <Text style={{ fontSize: size * 0.5 }}>{emoji ?? '📦'}</Text>
-      )}
-    </View>
+      <ConfirmModal
+        visible={logoutConfirmOpen}
+        icon={LogOut}
+        title="Keluar dari aplikasi?"
+        description="Anda harus login kembali untuk melanjutkan transaksi."
+        confirmLabel="Keluar"
+        loadingLabel="Keluar..."
+        variant="danger"
+        isLoading={isLoggingOut}
+        onConfirm={confirmLogout}
+        onCancel={() => setLogoutConfirmOpen(false)}
+      />
+    </Screen>
   );
 }
-
-/* ══════════════════════════════════════════════════════
-   Product List Card (Collapsible)
-   ══════════════════════════════════════════════════════ */
-const ProductListCard = React.memo(function ProductListCard({
-  products,
-}: {
-  products: ApiProduct[];
-}) {
-  const isEmpty = products.length === 0;
-  const [isExpanded, setIsExpanded] = useState(false);
-  const INITIAL_COUNT = 5;
-
-  const toggle = useCallback(() => {
-    setIsExpanded((prev) => !prev);
-  }, []);
-
-  const displayedProducts = isExpanded
-    ? products
-    : products.slice(0, INITIAL_COUNT);
-
-  const hasMore = products.length > INITIAL_COUNT;
-
-  return (
-    <View className="overflow-hidden rounded-2xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
-      <Pressable
-        onPress={toggle}
-        accessibilityRole="button"
-        accessibilityLabel={isExpanded ? 'Tutup daftar produk' : 'Buka daftar produk'}
-        className="flex-row items-center justify-between px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40"
-      >
-        <View className="flex-row items-center gap-2">
-          <Icon as={StoreIcon} size={15} className="text-primary dark:text-sage-400" />
-          <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
-            Produk di toko Anda
-          </Text>
-        </View>
-
-        <View className="flex-row items-center gap-2">
-          {!isEmpty ? (
-            <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 dark:bg-sage-500">
-              <Text className="font-dm-bold text-[11px] text-primary-foreground">
-                {products.length}
-              </Text>
-            </View>
-          ) : null}
-          <View style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }}>
-            <Icon as={ChevronDown} size={16} className="text-muted-foreground dark:text-stone-400" />
-          </View>
-        </View>
-      </Pressable>
-
-      {isEmpty ? (
-        <View className="items-center gap-1 border-t border-border/40 px-4 py-10 dark:border-stone-800/60">
-          <Text className="text-3xl">📦</Text>
-          <Text className="font-dm-semibold text-sm text-foreground dark:text-stone-50">
-            Belum ada produk
-          </Text>
-          <Text className="text-center font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-            Admin belum meng-assign produk ke toko Anda
-          </Text>
-        </View>
-      ) : (
-        <View className="border-t border-border/40 dark:border-stone-800/60">
-          {displayedProducts.map((p, i) => {
-            const hasPromo = p.discount_price != null && p.minimal_discount != null;
-            const displayPrice = hasPromo ? p.discount_price! : p.price;
-
-            return (
-              <View
-                key={p.id}
-                className={`flex-row items-center gap-3 px-4 py-2.5 ${i < displayedProducts.length - 1 ? 'border-b border-border/30 dark:border-stone-800/40' : ''}`}
-              >
-                <ProductImage uri={p.image_url} emoji={p.emoji} size={48} />
-                <View className="flex-1">
-                  <Text className="font-dm-semibold text-[12px] leading-tight text-foreground dark:text-stone-50" numberOfLines={1}>
-                    {p.name}
-                  </Text>
-                  <View className="mt-0.5 flex-row items-center gap-1.5">
-                    <Text className="font-mono text-[10px] text-muted-foreground dark:text-stone-400">
-                      {p.code}
-                    </Text>
-                    {hasPromo ? (
-                      <View className="rounded bg-destructive/10 px-1 py-px dark:bg-red-500/15">
-                        <Text className="font-dm-bold text-[8px] text-destructive dark:text-red-400">
-                          PROMO
-                        </Text>
-                      </View>
-                    ) : null}
-                    {!p.is_available && (
-                      <View className="rounded bg-amber-100 px-1 py-px dark:bg-amber-950/60">
-                        <Text className="font-dm-bold text-[8px] text-amber-700 dark:text-amber-400">
-                          HABIS
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-                <View className="items-end">
-                  {hasPromo ? (
-                    <Text className="font-dm-regular text-[9px] text-muted-foreground line-through dark:text-stone-400">
-                      {formatRupiah(p.price, false)}
-                    </Text>
-                  ) : null}
-                  <Text className="font-dm-bold text-[12px] text-foreground dark:text-stone-50">
-                    {formatRupiah(displayPrice, false)}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-
-          {hasMore && (
-            <Pressable
-              onPress={toggle}
-              className="flex-row items-center justify-center gap-1 border-t border-border/40 bg-muted/20 py-2.5 active:bg-muted/50 dark:border-stone-800/60 dark:bg-stone-800/20 dark:active:bg-stone-800/40"
-            >
-              <Text className="font-dm-semibold text-[11px] text-primary dark:text-sage-400">
-                {isExpanded ? 'Sembunyikan' : `Lihat ${products.length - INITIAL_COUNT} produk lainnya`}
-              </Text>
-              <Icon as={isExpanded ? ChevronUp : ChevronDown} size={14} className="text-primary dark:text-sage-400" />
-            </Pressable>
-          )}
-        </View>
-      )}
-    </View>
-  );
-});

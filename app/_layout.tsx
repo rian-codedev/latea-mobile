@@ -1,9 +1,6 @@
 import '@/global.css';
 
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
-import { NAV_THEME } from '@/lib/theme';
-import { SessionProvider, useSession } from '@/lib/session';
 import { ThemeProvider } from 'expo-router/react-navigation';
 import { PortalHost } from '@rn-primitives/portal';
 import { Stack, router } from 'expo-router';
@@ -19,10 +16,12 @@ import {
   DMSans_700Bold,
   DMSans_800ExtraBold,
 } from '@expo-google-fonts/dm-sans';
-import { useFirstLaunch } from '@/lib/use-first-launch';
-import { LoadingSplash } from '@/lib/loading-splash';
 
-// ⭐ Prevent native splash from auto-hiding
+import { NAV_THEME } from '@/lib/theme/navigation';
+import { SessionProvider } from '@/lib/stores/session';
+import { useFirstLaunch } from '@/lib/hooks/use-first-launch';
+import { LoadingSplash } from '@/components/feedback/loading-splash';
+
 SplashScreen.preventAutoHideAsync();
 
 export { ErrorBoundary } from 'expo-router';
@@ -51,7 +50,6 @@ function RootNavigator() {
   const { isFirstLaunch } = useFirstLaunch();
   const [appReady, setAppReady] = useState(false);
 
-  // ⭐ Hide native splash + tunggu minimum 1300ms supaya animasi selesai
   useEffect(() => {
     if (fontsLoaded && isFirstLaunch !== null) {
       SplashScreen.hideAsync();
@@ -60,14 +58,12 @@ function RootNavigator() {
     }
   }, [fontsLoaded, isFirstLaunch]);
 
-  // Redirect ke onboarding kalau first install
   useEffect(() => {
     if (appReady && isFirstLaunch === true) {
       router.replace('/(onboarding)' as any);
     }
   }, [appReady, isFirstLaunch]);
 
-  // ⭐ GATE dengan appReady — jangan unmount splash sampai animasi selesai
   if (!fontsLoaded || isFirstLaunch === null || !appReady) {
     return <LoadingSplash />;
   }
@@ -90,7 +86,6 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
-      {/* ❌ HAPUS StatusBar di sini — biar tidak konflik */}
       <SessionProvider>
         <RootNavigator />
       </SessionProvider>

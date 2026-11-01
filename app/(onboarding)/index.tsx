@@ -1,28 +1,28 @@
-import { useEffect, useRef, useState, useMemo, memo } from 'react';
-import {
-  View,
-  Pressable,
-  Animated,
-  Easing,
-  AccessibilityInfo,
-  useWindowDimensions,
-} from 'react-native';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { View, Pressable, Animated, Easing, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
-import { ArrowRight, ArrowLeft } from 'lucide-react-native';
-import { useFirstLaunch } from '@/lib/use-first-launch';
+import { ArrowLeft } from 'lucide-react-native';
+
+import { useReduceMotion } from '@/lib/hooks/use-reduce-motion';
+import { useEntrance } from '@/lib/hooks/use-entrance';
+import { useFirstLaunch } from '@/lib/hooks/use-first-launch';
+import { WARM_GRADIENT } from '@/lib/theme/gradients';
+import { ROUTES } from '@/lib/constants/app';
+
+import { SlideContent } from '@/components/features/onboarding/slide-content';
+import { SlideDots } from '@/components/features/onboarding/slide-dots';
+import { NextButton } from '@/components/features/onboarding/next-button';
 
 import Illustration1 from '@/assets/illustrations/onboarding-1.svg';
 import Illustration2 from '@/assets/illustrations/onboarding-2.svg';
 import Illustration3 from '@/assets/illustrations/onboarding-3.svg';
 
-/* ══════════════════════════════════════════════════════
-   Data Slides
-   ══════════════════════════════════════════════════════ */
+/* ── Data ── */
 const SLIDES = [
   {
     illustration: Illustration1,
@@ -41,14 +41,9 @@ const SLIDES = [
   },
 ] as const;
 
-/* ══════════════════════════════════════════════════════
-   Theme Tokens
-   ══════════════════════════════════════════════════════ */
-type Theme = 'light' | 'dark';
-
-const THEME = {
+/* ── Token khusus onboarding ── */
+const TOKENS = {
   light: {
-    gradient: ['#F9E4BC', '#FEF9ED', '#F5FAF5'] as const,
     orb1: 'rgba(132,169,140,0.18)',
     orb2: 'rgba(249,228,188,0.30)',
     orb3: 'rgba(200,220,205,0.15)',
@@ -57,7 +52,6 @@ const THEME = {
     cardBg: '#FFFFFF',
   },
   dark: {
-    gradient: ['#1A1612', '#0F0E0B', '#0D1410'] as const,
     orb1: 'rgba(132,169,140,0.10)',
     orb2: 'rgba(200,180,120,0.06)',
     orb3: 'rgba(132,169,140,0.05)',
@@ -67,82 +61,6 @@ const THEME = {
   },
 } as const;
 
-const LOGIN_ROUTE = '/(auth)/login' as any;
-
-/* ══════════════════════════════════════════════════════
-   Hooks
-   ══════════════════════════════════════════════════════ */
-function useReduceMotion() {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduce);
-    const sub = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReduce
-    );
-    return () => sub.remove();
-  }, []);
-  return reduce;
-}
-
-function useEntrance(reduce: boolean, distance = 18) {
-  const v = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (reduce) {
-      v.setValue(1);
-      return;
-    }
-    const anim = Animated.timing(v, {
-      toValue: 1,
-      duration: 600,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    });
-    anim.start();
-    return () => anim.stop();
-  }, [reduce]);
-
-  return {
-    opacity: v,
-    transform: [
-      {
-        translateY: v.interpolate({
-          inputRange: [0, 1],
-          outputRange: [distance, 0],
-        }),
-      },
-    ],
-  };
-}
-
-/* ⭐ Memoized illustration — tidak re-render saat state lain berubah */
-const MemoIllustration = memo(
-  function MemoIllustration({
-    Component,
-    size,
-  }: {
-    Component: React.ComponentType<any>;
-    size: number;
-  }) {
-    return (
-      <View
-        style={{ width: size, height: size }}
-        className="items-center justify-center"
-      >
-        <Component
-          width="100%"
-          height="100%"
-          preserveAspectRatio="xMidYMid meet"
-        />
-      </View>
-    );
-  },
-  (prev, next) => prev.Component === next.Component && prev.size === next.size
-);
-
-/* ══════════════════════════════════════════════════════
-   Main Screen
-   ══════════════════════════════════════════════════════ */
 export default function OnboardingScreen() {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -150,9 +68,9 @@ export default function OnboardingScreen() {
   const reduceMotion = useReduceMotion();
 
   const { colorScheme } = useColorScheme();
-  const theme: Theme = colorScheme === 'dark' ? 'dark' : 'light';
-  const colors = THEME[theme];
-  const isDark = theme === 'dark';
+  const isDark = colorScheme === 'dark';
+  const tokens = isDark ? TOKENS.dark : TOKENS.light;
+  const gradient = isDark ? WARM_GRADIENT.dark : WARM_GRADIENT.light;
 
   const isTablet = width >= 768;
   const SCREEN_W = width;
@@ -161,97 +79,72 @@ export default function OnboardingScreen() {
   const [idx, setIdx] = useState(0);
   const [renderIdx, setRenderIdx] = useState(0);
   const isLast = idx === SLIDES.length - 1;
-  const direction = useRef(1);
   const isAnimating = useRef(false);
 
-  /* ⭐ Animation values — dipisah agar tidak konflik */
+  /* Animation values */
   const contentOpacity = useRef(new Animated.Value(1)).current;
   const contentTranslateX = useRef(new Animated.Value(0)).current;
+  const cardEntrance = useEntrance(0, reduceMotion, 24);
 
-  const cardEntrance = useEntrance(reduceMotion, 24);
-
-  /* Orbs */
+  /* Floating */
   const orb1Y = useRef(new Animated.Value(0)).current;
   const orb2Y = useRef(new Animated.Value(0)).current;
   const orb3Y = useRef(new Animated.Value(0)).current;
-
-  /* Illustration float */
   const illustrationFloat = useRef(new Animated.Value(0)).current;
 
   /* Back button fade */
   const backButtonFade = useRef(new Animated.Value(0)).current;
 
-  const orbSizes = useMemo(() => {
-    return {
-      orb1: isTablet
-        ? Math.min(width * 0.65, 650)
-        : Math.min(width * 0.7, 420),
-      orb2: isTablet
-        ? Math.min(width * 0.7, 700)
-        : Math.min(width * 0.75, 450),
-      orb3: isTablet
-        ? Math.min(width * 0.4, 400)
-        : Math.min(width * 0.4, 240),
-    };
-  }, [width, isTablet]);
+  const orbSizes = useMemo(
+    () => ({
+      orb1: isTablet ? Math.min(width * 0.65, 650) : Math.min(width * 0.7, 420),
+      orb2: isTablet ? Math.min(width * 0.7, 700) : Math.min(width * 0.75, 450),
+      orb3: isTablet ? Math.min(width * 0.4, 400) : Math.min(width * 0.4, 240),
+    }),
+    [width, isTablet],
+  );
 
-  /* ── Floating animations ── */
+  /* Floating animations */
   useEffect(() => {
     if (reduceMotion) return;
 
-    const float = (orb: Animated.Value, duration: number, distance: number) =>
+    const float = (v: Animated.Value, duration: number, distance: number) =>
       Animated.loop(
         Animated.sequence([
-          Animated.timing(orb, {
+          Animated.timing(v, {
             toValue: distance,
             duration,
             easing: Easing.inOut(Easing.sin),
             useNativeDriver: true,
           }),
-          Animated.timing(orb, {
+          Animated.timing(v, {
             toValue: -distance,
             duration,
             easing: Easing.inOut(Easing.sin),
             useNativeDriver: true,
           }),
-        ])
+        ]),
       );
 
     const o1 = float(orb1Y, 3500, 12);
     const o2 = float(orb2Y, 4200, -15);
     const o3 = float(orb3Y, 3000, 8);
-
-    const illus = Animated.loop(
-      Animated.sequence([
-        Animated.timing(illustrationFloat, {
-          toValue: 1,
-          duration: 2400,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(illustrationFloat, {
-          toValue: 0,
-          duration: 2400,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ])
-    );
+    const il = float(illustrationFloat, 2400, 10);
 
     o1.start();
     o2.start();
     o3.start();
-    illus.start();
+    il.start();
 
     return () => {
       o1.stop();
       o2.stop();
       o3.stop();
-      illus.stop();
+      il.stop();
     };
   }, [reduceMotion]);
 
-  /* ── Back button fade ── */
+  /* Back button fade */
   useEffect(() => {
     if (reduceMotion) {
       backButtonFade.setValue(idx > 0 ? 1 : 0);
@@ -265,13 +158,12 @@ export default function OnboardingScreen() {
     }).start();
   }, [idx, reduceMotion]);
 
-  /* ⭐ Transition — fade OUT → change content → fade IN */
+  /* Slide transition */
   function goTo(next: number) {
     if (isAnimating.current) return;
     if (next === idx || next < 0 || next > SLIDES.length - 1) return;
 
     const dir = next > idx ? 1 : -1;
-    direction.current = dir;
 
     if (reduceMotion) {
       setIdx(next);
@@ -281,7 +173,6 @@ export default function OnboardingScreen() {
 
     isAnimating.current = true;
 
-    // 1. Exit — slide & fade out ke arah berlawanan
     Animated.parallel([
       Animated.timing(contentOpacity, {
         toValue: 0,
@@ -290,7 +181,7 @@ export default function OnboardingScreen() {
         useNativeDriver: true,
       }),
       Animated.timing(contentTranslateX, {
-        toValue: -30 * dir, // geser keluar ke kiri jika next
+        toValue: -30 * dir,
         duration: 180,
         easing: Easing.in(Easing.quad),
         useNativeDriver: true,
@@ -300,15 +191,10 @@ export default function OnboardingScreen() {
         isAnimating.current = false;
         return;
       }
-
-      // 2. Update content setelah fade out
       setIdx(next);
       setRenderIdx(next);
-
-      // 3. Prep entry — dari sisi berlawanan
       contentTranslateX.setValue(30 * dir);
 
-      // 4. Enter — slide & fade in
       Animated.parallel([
         Animated.timing(contentOpacity, {
           toValue: 1,
@@ -330,18 +216,14 @@ export default function OnboardingScreen() {
 
   async function finish() {
     await markLaunched();
-    router.replace(LOGIN_ROUTE);
+    router.replace(ROUTES.login as any);
   }
 
   function handleNext() {
-    if (isLast) {
-      finish();
-    } else {
-      goTo(idx + 1);
-    }
+    if (isLast) finish();
+    else goTo(idx + 1);
   }
 
-  /* ⭐ Content style */
   const contentStyle = reduceMotion
     ? undefined
     : {
@@ -355,29 +237,23 @@ export default function OnboardingScreen() {
         transform: [
           {
             translateY: illustrationFloat.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, -10],
+              inputRange: [-10, 10],
+              outputRange: [-10, 10],
             }),
           },
         ],
       };
 
   const shownSlide = SLIDES[renderIdx];
-  const Illustration = shownSlide.illustration;
-
-  const illustrationSize = isTablet ? 280 : 200;
 
   return (
     <View className="flex-1 bg-white dark:bg-stone-950">
-      {/* ⭐ Gradient — HANYA SATU layer (yang kedua mubazir) */}
-      <View className="absolute inset-0">
-        <LinearGradient
-          colors={[...colors.gradient]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={{ flex: 1 }}
-        />
-      </View>
+      <LinearGradient
+        colors={[...gradient]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+      />
 
       {/* Orbs */}
       <Animated.View
@@ -389,7 +265,7 @@ export default function OnboardingScreen() {
           width: orbSizes.orb1,
           height: orbSizes.orb1,
           borderRadius: orbSizes.orb1 / 2,
-          backgroundColor: colors.orb1,
+          backgroundColor: tokens.orb1,
           transform: [{ translateY: orb1Y }],
         }}
       />
@@ -402,7 +278,7 @@ export default function OnboardingScreen() {
           width: orbSizes.orb2,
           height: orbSizes.orb2,
           borderRadius: orbSizes.orb2 / 2,
-          backgroundColor: colors.orb2,
+          backgroundColor: tokens.orb2,
           transform: [{ translateY: orb2Y }],
         }}
       />
@@ -415,23 +291,17 @@ export default function OnboardingScreen() {
           width: orbSizes.orb3,
           height: orbSizes.orb3,
           borderRadius: orbSizes.orb3 / 2,
-          backgroundColor: colors.orb3,
+          backgroundColor: tokens.orb3,
           transform: [{ translateY: orb3Y }],
         }}
       />
 
       <View
         className="flex-1 items-center justify-center px-6"
-        style={{
-          paddingTop: insets.top + 20,
-          paddingBottom: insets.bottom + 20,
-        }}
+        style={{ paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }}
       >
         {/* Lewati */}
-        <View
-          className="absolute right-6 z-10"
-          style={{ top: insets.top + 16 }}
-        >
+        <View className="absolute right-6 z-10" style={{ top: insets.top + 16 }}>
           <Pressable onPress={finish} hitSlop={10}>
             <Text className="font-dm-medium text-xs text-muted-foreground dark:text-stone-400">
               Lewati
@@ -443,10 +313,10 @@ export default function OnboardingScreen() {
         <Animated.View
           style={[
             {
-              backgroundColor: colors.cardBg,
+              backgroundColor: tokens.cardBg,
               borderRadius: 28,
-              shadowColor: colors.cardShadow,
-              shadowOpacity: colors.cardShadowOpacity,
+              shadowColor: tokens.cardShadow,
+              shadowOpacity: tokens.cardShadowOpacity,
               shadowRadius: 28,
               shadowOffset: { width: 0, height: 14 },
               elevation: 12,
@@ -456,7 +326,7 @@ export default function OnboardingScreen() {
           ]}
           className="relative border border-border/40 dark:border-stone-800/60"
         >
-          {/* Tombol kembali */}
+          {/* Back */}
           <Animated.View
             style={{
               position: 'absolute',
@@ -490,83 +360,23 @@ export default function OnboardingScreen() {
             </Pressable>
           </Animated.View>
 
-          <View
-            className={isTablet ? 'gap-8 px-12 py-12' : 'gap-6 px-6 py-8'}
-          >
-            {/* ⭐ Konten slide — dengan minHeight biar tidak shift */}
-            <Animated.View
-              style={[
-                contentStyle,
-                {
-                  minHeight: isTablet ? 420 : 340,
-                },
-              ]}
-              className="items-center justify-center gap-6"
-            >
-              {/* Ilustrasi mengambang */}
-              <Animated.View
-                style={illustrationFloatStyle}
-                className="items-center justify-center"
-              >
-                <MemoIllustration
-                  Component={Illustration}
-                  size={illustrationSize}
-                />
-              </Animated.View>
+          <View className={isTablet ? 'gap-8 px-12 py-12' : 'gap-6 px-6 py-8'}>
+            <SlideContent
+              title={shownSlide.title}
+              body={shownSlide.body}
+              Illustration={shownSlide.illustration}
+              isTablet={isTablet}
+              illustrationSize={isTablet ? 280 : 200}
+              contentStyle={contentStyle}
+              illustrationFloatStyle={illustrationFloatStyle}
+            />
 
-              {/* Title + Body */}
-              <View className="items-center gap-2.5">
-                <Text
-                  className={`text-center font-dm-extrabold tracking-tight text-foreground dark:text-stone-50 ${
-                    isTablet ? 'text-3xl' : 'text-2xl'
-                  }`}
-                >
-                  {shownSlide.title}
-                </Text>
+            <SlideDots
+              count={SLIDES.length}
+              activeIndex={idx}
+              onDotPress={goTo}
+            />
 
-                <View
-                  style={{
-                    minHeight: 72,
-                    alignItems: 'center',
-                    justifyContent: 'flex-start',
-                  }}
-                >
-                  <Text
-                    className={`text-center font-dm-regular leading-6 text-muted-foreground dark:text-stone-400 ${
-                      isTablet
-                        ? 'max-w-[380px] text-base'
-                        : 'max-w-[280px] text-sm'
-                    }`}
-                    numberOfLines={3}
-                  >
-                    {shownSlide.body}
-                  </Text>
-                </View>
-              </View>
-            </Animated.View>
-
-            {/* Dots */}
-            <View className="flex-row justify-center gap-2">
-              {SLIDES.map((_, i) => (
-                <Pressable
-                  key={i}
-                  onPress={() => goTo(i)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Ke slide ${i + 1}`}
-                >
-                  <View
-                    className={`h-1.5 rounded-full ${
-                      i === idx
-                        ? 'w-5 bg-primary dark:bg-sage-400'
-                        : 'w-1.5 bg-foreground/15 dark:bg-stone-100/15'
-                    }`}
-                  />
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Tombol Next */}
             <View className="items-center">
               <NextButton
                 label={isLast ? 'Mulai Sekarang' : 'Lanjut'}
@@ -577,59 +387,5 @@ export default function OnboardingScreen() {
         </Animated.View>
       </View>
     </View>
-  );
-}
-
-/* ══════════════════════════════════════════════════════
-   Next Button
-   ══════════════════════════════════════════════════════ */
-function NextButton({
-  label,
-  onPress,
-}: {
-  label: string;
-  onPress: () => void;
-}) {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  function pressIn() {
-    Animated.timing(scale, {
-      toValue: 0.96,
-      duration: 100,
-      useNativeDriver: true,
-    }).start();
-  }
-  function pressOut() {
-    Animated.spring(scale, {
-      toValue: 1,
-      friction: 5,
-      tension: 140,
-      useNativeDriver: true,
-    }).start();
-  }
-
-  return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <Pressable
-        onPress={onPress}
-        onPressIn={pressIn}
-        onPressOut={pressOut}
-        accessibilityRole="button"
-        className="flex-row items-center justify-center gap-2 rounded-full bg-primary/90 px-8 dark:bg-sage-500/90"
-        style={{
-          height: 52,
-          shadowColor: '#0F172A',
-          shadowOpacity: 0.12,
-          shadowRadius: 14,
-          shadowOffset: { width: 0, height: 6 },
-          elevation: 4,
-        }}
-      >
-        <Text className="font-dm-bold text-sm text-primary-foreground">
-          {label}
-        </Text>
-        <Icon as={ArrowRight} size={16} className="text-primary-foreground" />
-      </Pressable>
-    </Animated.View>
   );
 }

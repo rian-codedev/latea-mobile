@@ -1,13 +1,13 @@
 import { Redirect, Stack } from 'expo-router';
-import { useSession } from '@/lib/session';
+import { LoadingScreen } from '@/components/feedback/loading-screen';
+import { useSession } from '@/lib/stores/session';
+import { ROUTES } from '@/lib/constants/app';
 
 export default function AuthLayout() {
   const { user, isLoading } = useSession();
 
-  // Sudah login → redirect ke halaman utama
-  if (isLoading && user) {
-    return <Redirect href="/(app)" />;
-  }
+  if (isLoading) return <LoadingScreen />;
+  if (user) return <Redirect href={ROUTES.home as any} />;
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }

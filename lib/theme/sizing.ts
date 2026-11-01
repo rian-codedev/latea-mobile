@@ -1,0 +1,8 @@
+export const HEADER_HEIGHT = 60;
+export const CART_BAR_HEIGHT = 64;
+export const RECENT_ITEM_HEIGHT = 62;
+export const RECENT_VISIBLE_ITEMS = 5;
+export const RECENT_MAX_HEIGHT = RECENT_ITEM_HEIGHT * RECENT_VISIBLE_ITEMS;
+
+export const PRODUCT_CARD_HEIGHT = 188;
+export const PRODUCT_IMAGE_HEIGHT = 104;
