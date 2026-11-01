@@ -1,5 +1,14 @@
 import { useRef, useState } from 'react';
-import { View, Pressable, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, useWindowDimensions, type TextInput } from 'react-native';
+import {
+  View,
+  Pressable,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  useWindowDimensions,
+  type TextInput,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
@@ -10,14 +19,11 @@ import { Field } from '@/components/ui/field';
 import { ErrorBanner } from '@/components/feedback/error-banner';
 import { useSession } from '@/lib/stores/session';
 import { getErrorMessage } from '@/lib/api/client';
-import { ROUTES } from '@/lib/constants/app';
-
 import { useReduceMotion } from '@/lib/hooks/use-reduce-motion';
 import { useEntrance } from '@/lib/hooks/use-entrance';
 import { BrandLogo } from '@/components/features/auth/brand-logo';
 import { LoginBanner } from '@/components/features/auth/login-banner';
-
-const HOME_ROUTE = '/(app)';
+import { ROUTES } from '@/lib/constants/app';
 
 export default function LoginScreen() {
   const { width } = useWindowDimensions();
@@ -53,17 +59,23 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      // ⭐ iOS: padding, Android: height (resize agar tombol tetap terlihat)
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
       className="flex-1 bg-muted/60 dark:bg-stone-950"
     >
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          flexGrow: 1, alignItems: 'center', justifyContent: 'center',
+          flexGrow: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
           paddingHorizontal: 20,
-          paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24,
+          paddingTop: insets.top + 24,
+          paddingBottom: insets.bottom + 24,
         }}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
       >
         <View style={{ width: '100%', maxWidth: isSplit ? 980 : 440 }}>
           <View
@@ -90,13 +102,19 @@ export default function LoginScreen() {
                     label="Email"
                     icon={Mail}
                     value={email}
-                    onChangeText={(t: string) => { setEmail(t); if (error) setError(null); }}
+                    onChangeText={(t: string) => {
+                      setEmail(t);
+                      if (error) setError(null);
+                    }}
                     placeholder="kasir@latea.test"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    autoComplete="email"
                     keyboardType="email-address"
+                    textContentType="emailAddress"
                     returnKeyType="next"
                     onSubmitEditing={() => passwordRef.current?.focus()}
+                    submitBehavior="submit"
                     hasError={!!error}
                     editable={!loading}
                   />
@@ -106,15 +124,29 @@ export default function LoginScreen() {
                     icon={Lock}
                     inputRef={passwordRef}
                     value={password}
-                    onChangeText={(t: string) => { setPassword(t); if (error) setError(null); }}
+                    onChangeText={(t: string) => {
+                      setPassword(t);
+                      if (error) setError(null);
+                    }}
                     placeholder="Masukkan kata sandi"
                     secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="password"
+                    textContentType="password"
                     returnKeyType="go"
                     onSubmitEditing={handleSubmit}
                     hasError={!!error}
                     editable={!loading}
                     right={
-                      <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={10}>
+                      <Pressable
+                        onPress={() => setShowPassword((v) => !v)}
+                        hitSlop={10}
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'
+                        }
+                      >
                         <Icon
                           as={showPassword ? EyeOff : Eye}
                           size={18}
@@ -130,6 +162,7 @@ export default function LoginScreen() {
                 <Pressable
                   onPress={handleSubmit}
                   disabled={loading}
+                  accessibilityRole="button"
                   className="h-12 flex-row items-center justify-center gap-2 rounded-full bg-primary active:opacity-90 dark:bg-sage-500"
                 >
                   {loading ? (

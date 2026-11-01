@@ -8,7 +8,6 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
   Image,
   Text as RNText,
 } from 'react-native';
@@ -111,7 +110,7 @@ export function CheckoutModal({
       <View className="flex-1 items-center justify-center bg-black/40 px-4">
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="w-full items-center"
         >
           <View
@@ -125,10 +124,19 @@ export function CheckoutModal({
                   {isEditMode ? 'Update Pembayaran' : 'Pembayaran'}
                 </Text>
                 <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-                  {isEditMode ? 'Konfirmasi perubahan transaksi' : 'Masukkan uang yang diterima'}
+                  {isEditMode
+                    ? 'Konfirmasi perubahan transaksi'
+                    : 'Masukkan uang yang diterima'}
                 </Text>
               </View>
-              <IconButton icon={X} variant="filled" size="sm" onPress={onClose} disabled={isSubmitting} accessibilityLabel="Tutup" />
+              <IconButton
+                icon={X}
+                variant="filled"
+                size="sm"
+                onPress={onClose}
+                disabled={isSubmitting}
+                accessibilityLabel="Tutup"
+              />
             </View>
 
             <ScrollView
@@ -136,11 +144,11 @@ export function CheckoutModal({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ padding: 16, gap: 12 }}
             >
-              {/* Ringkasan */}
+              {/* Ringkasan item — display only */}
               <View className="overflow-hidden rounded-2xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
                 <View className="border-b border-border/40 px-4 py-2.5 dark:border-stone-800/60">
                   <Text className="font-dm-bold text-xs text-foreground dark:text-stone-50">
-                    Ringkasan · {items.length} item
+                    Ringkasan · {items.reduce((a, i) => a + i.quantity, 0)} item
                   </Text>
                 </View>
                 <View className="px-4">
@@ -154,13 +162,20 @@ export function CheckoutModal({
                       >
                         <View className="size-8 items-center justify-center overflow-hidden rounded-lg bg-accent/60 dark:bg-stone-800">
                           {item.imageUrl ? (
-                            <Image source={{ uri: item.imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                            <Image
+                              source={{ uri: item.imageUrl }}
+                              style={{ width: '100%', height: '100%' }}
+                              resizeMode="cover"
+                            />
                           ) : (
                             <RNText className="text-sm">{item.emoji}</RNText>
                           )}
                         </View>
                         <View className="flex-1">
-                          <Text className="font-dm-semibold text-[12px] text-foreground dark:text-stone-50" numberOfLines={1}>
+                          <Text
+                            className="font-dm-semibold text-[12px] text-foreground dark:text-stone-50"
+                            numberOfLines={1}
+                          >
                             {item.name}
                           </Text>
                           <Text className="font-dm-regular text-[10px] text-muted-foreground dark:text-stone-400">
@@ -174,35 +189,61 @@ export function CheckoutModal({
                     );
                   })}
                 </View>
+
+                {/* Total */}
                 <View className="gap-1.5 border-t border-border/40 bg-muted/30 px-4 py-3 dark:border-stone-800/60 dark:bg-stone-800/20">
-                  <View className="flex-row justify-between">
-                    <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">Subtotal</Text>
-                    <Text className="font-dm-medium text-xs text-foreground dark:text-stone-50">{formatRupiah(subtotal)}</Text>
+                  <View className="flex-row items-center justify-between gap-3">
+                    <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
+                      Subtotal
+                    </Text>
+                    <Text
+                      className="shrink-0 font-dm-medium text-xs text-foreground dark:text-stone-50"
+                      numberOfLines={1}
+                    >
+                      {formatRupiah(subtotal)}
+                    </Text>
                   </View>
+
                   {discount > 0 ? (
-                    <View className="flex-row justify-between">
-                      <Text className="font-dm-regular text-xs text-destructive dark:text-red-400">Diskon</Text>
-                      <Text className="font-dm-medium text-xs text-destructive dark:text-red-400">-{formatRupiah(discount)}</Text>
+                    <View className="flex-row items-center justify-between gap-3">
+                      <Text className="font-dm-regular text-xs text-destructive dark:text-red-400">
+                        Diskon
+                      </Text>
+                      <Text
+                        className="shrink-0 font-dm-medium text-xs text-destructive dark:text-red-400"
+                        numberOfLines={1}
+                      >
+                        -{formatRupiah(discount)}
+                      </Text>
                     </View>
                   ) : null}
+
                   <View className="my-1 h-px bg-border/60 dark:bg-stone-700/60" />
-                  <View className="flex-row items-center justify-between">
-                    <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">Total</Text>
-                    <Text className="font-dm-extrabold text-2xl leading-none tracking-tight text-primary dark:text-sage-400">
+
+                  <View className="flex-row items-center justify-between gap-3">
+                    <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
+                      Total
+                    </Text>
+                    <Text
+                      className="shrink-0 font-dm-extrabold text-2xl leading-none tracking-tight text-primary dark:text-sage-400"
+                      numberOfLines={1}
+                    >
                       {formatRupiah(total)}
                     </Text>
                   </View>
                 </View>
               </View>
 
-              {/* Input uang */}
+              {/* Input uang diterima */}
               <View className="gap-3 rounded-2xl border border-border/40 bg-white p-4 dark:border-stone-800/60 dark:bg-stone-900">
                 <Text className="font-dm-bold text-xs text-foreground dark:text-stone-50">
                   Uang diterima
                 </Text>
                 <View className="h-14 flex-row items-center gap-3 rounded-xl border-[1.5px] border-border bg-white px-4 dark:border-stone-700 dark:bg-stone-900">
                   <Icon as={Banknote} size={20} className="text-muted-foreground dark:text-stone-400" />
-                  <Text className="font-dm-medium text-base text-muted-foreground dark:text-stone-400">Rp</Text>
+                  <Text className="font-dm-medium text-base text-muted-foreground dark:text-stone-400">
+                    Rp
+                  </Text>
                   <TextInput
                     value={payment ? Number(payment).toLocaleString('id-ID') : ''}
                     onChangeText={(t) => {
@@ -229,16 +270,16 @@ export function CheckoutModal({
                           if (error) setError(null);
                         }}
                         disabled={isSubmitting}
-                        className={`h-9 min-w-[80px] items-center justify-center rounded-full border active:opacity-80 ${
-                          active
+                        className={`h-9 min-w-[80px] items-center justify-center rounded-full border active:opacity-80 ${active
                             ? 'border-primary bg-primary dark:border-sage-500 dark:bg-sage-500'
                             : 'border-border/60 bg-white dark:border-stone-700/60 dark:bg-stone-900'
-                        }`}
+                          }`}
                       >
                         <Text
-                          className={`font-dm-bold text-xs ${
-                            active ? 'text-primary-foreground' : 'text-foreground dark:text-stone-50'
-                          }`}
+                          className={`font-dm-bold text-xs ${active
+                              ? 'text-primary-foreground'
+                              : 'text-foreground dark:text-stone-50'
+                            }`}
                           numberOfLines={1}
                         >
                           {isExact ? 'Pas' : formatRupiah(amount)}
@@ -251,24 +292,25 @@ export function CheckoutModal({
 
               {/* Kembalian */}
               <View
-                className={`overflow-hidden rounded-2xl border ${
-                  change >= 0
+                className={`overflow-hidden rounded-2xl border ${change >= 0
                     ? 'border-primary/30 bg-primary/5 dark:border-sage-500/30 dark:bg-sage-500/10'
                     : 'border-destructive/30 bg-destructive/5 dark:border-red-500/30 dark:bg-red-500/10'
-                }`}
+                  }`}
               >
                 <View className="flex-row items-center justify-between px-4 py-3.5">
                   <Text
-                    className={`font-dm-semibold text-sm ${
-                      change >= 0 ? 'text-foreground dark:text-stone-50' : 'text-destructive dark:text-red-400'
-                    }`}
+                    className={`font-dm-semibold text-sm ${change >= 0
+                        ? 'text-foreground dark:text-stone-50'
+                        : 'text-destructive dark:text-red-400'
+                      }`}
                   >
                     {change >= 0 ? 'Kembalian' : 'Kurang'}
                   </Text>
                   <Text
-                    className={`font-dm-extrabold text-xl leading-none tracking-tight ${
-                      change >= 0 ? 'text-primary dark:text-sage-400' : 'text-destructive dark:text-red-400'
-                    }`}
+                    className={`font-dm-extrabold text-xl leading-none tracking-tight ${change >= 0
+                        ? 'text-primary dark:text-sage-400'
+                        : 'text-destructive dark:text-red-400'
+                      }`}
                   >
                     {formatRupiah(Math.abs(change))}
                   </Text>

@@ -13,6 +13,23 @@ export const api = axios.create({
   timeout: 15000,
 });
 
+/* ══════════════════════════════════════════════════════
+   Auth Error Handler — untuk 401 global
+   ══════════════════════════════════════════════════════ */
+type AuthErrorHandler = () => void;
+
+let onAuthError: AuthErrorHandler | null = null;
+let lastAuthErrorAt = 0;
+
+/**
+ * Daftarkan handler yang dipanggil saat 401 terjadi.
+ * SessionProvider mendaftarkan handler ini agar bisa
+ * logout otomatis + redirect ke login.
+ */
+export function setAuthErrorHandler(handler: AuthErrorHandler | null) {
+  onAuthError = handler;
+}
+
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const token = await tokenStorage.get();
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -24,6 +41,14 @@ api.interceptors.response.use(
   async (err: AxiosError) => {
     if (err.response?.status === 401) {
       await tokenStorage.clear();
+
+      // ⭐ Debounce — hindari trigger callback berkali-kali dari
+      // banyak request paralel yang kena 401 bersamaan.
+      const now = Date.now();
+      if (now - lastAuthErrorAt > 1000) {
+        lastAuthErrorAt = now;
+        onAuthError?.();
+      }
     }
     return Promise.reject(err);
   },

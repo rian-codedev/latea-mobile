@@ -21,6 +21,7 @@ import { NAV_THEME } from '@/lib/theme/navigation';
 import { SessionProvider } from '@/lib/stores/session';
 import { useFirstLaunch } from '@/lib/hooks/use-first-launch';
 import { LoadingSplash } from '@/components/feedback/loading-splash';
+import { AxiosError } from 'axios';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -30,7 +31,14 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5,
-      retry: 1,
+      retry: (failureCount, error) => {
+        // ⭐ Jangan retry 401/403 — token salah, retry tidak akan berhasil
+        if (error instanceof AxiosError) {
+          const status = error.response?.status;
+          if (status === 401 || status === 403) return false;
+        }
+        return failureCount < 1;
+      },
     },
   },
 });

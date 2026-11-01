@@ -277,6 +277,7 @@ export default function DashboardScreen() {
         initial={initial}
         greeting={getGreeting()}
         name={cashierName}
+        avatarUrl={user?.avatar_url ?? null}  // ⭐ NEW
         time={timeLabel}
         fullDate={dateFullLabel}
         expanded={isWide}

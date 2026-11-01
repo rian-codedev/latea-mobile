@@ -21,6 +21,7 @@ import { CartPanel } from '@/components/features/cashier/cart-panel';
 import { CheckoutModal } from '@/components/features/cashier/checkout-modal';
 import { FloatingCartBar } from '@/components/features/cashier/floating-cart-bar';
 import { HEADER_HEIGHT, CART_BAR_HEIGHT, PRODUCT_CARD_HEIGHT } from '@/lib/theme/sizing';
+import { useKeepAwake } from 'expo-keep-awake';
 
 type Spacer = { id: string; spacer: true };
 type GridItem = ApiProduct | Spacer;
@@ -30,6 +31,7 @@ function isSpacer(item: GridItem): item is Spacer {
 }
 
 export default function CashierScreen() {
+  useKeepAwake();
   const insets = useSafeAreaInsets();
   const { device, isTablet } = useResponsive();
   const cols = getGridColumns(device, 'catalog');

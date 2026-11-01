@@ -1,4 +1,5 @@
-import { View, Pressable, Image, Text as RNText } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Pressable, Image, TextInput, Text as RNText } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { Icon } from '@/components/ui/icon';
@@ -11,11 +12,13 @@ export function CartRow({
   item,
   onInc,
   onDec,
+  onChangeQty,
   onRemove,
 }: {
   item: CartItem;
   onInc: () => void;
   onDec: () => void;
+  onChangeQty: (qty: number) => void;
   onRemove: () => void;
 }) {
   const ep = effectivePrice(item);
@@ -24,6 +27,32 @@ export function CartRow({
     item.discountPrice != null &&
     item.minimalDiscount != null &&
     item.quantity >= item.minimalDiscount;
+
+  /* ⭐ Local draft untuk input — bisa kosong sementara saat user hapus */
+  const [draft, setDraft] = useState(String(item.quantity));
+  const [focused, setFocused] = useState(false);
+
+  // Sync draft dari store saat tidak sedang fokus (mis. setelah tombol +/- ditekan)
+  useEffect(() => {
+    if (!focused) setDraft(String(item.quantity));
+  }, [item.quantity, focused]);
+
+  const handleChange = (t: string) => {
+    const cleaned = t.replace(/\D/g, '').slice(0, 4); // max 9999
+    setDraft(cleaned);
+    if (cleaned.length === 0) return; // biarkan kosong sementara
+    const n = parseInt(cleaned, 10);
+    if (n >= 1 && n !== item.quantity) {
+      onChangeQty(n);
+    }
+  };
+
+  const handleBlur = () => {
+    setFocused(false);
+    if (draft === '' || parseInt(draft, 10) < 1) {
+      setDraft(String(item.quantity)); // reset kalau kosong/tidak valid
+    }
+  };
 
   return (
     <View className="flex-row gap-2.5 border-b border-border/30 py-3 dark:border-stone-800/40">
@@ -56,17 +85,50 @@ export function CartRow({
         </View>
 
         <View className="flex-row items-center gap-1.5">
-          <IconButton icon={Minus} size="sm" variant="outline" onPress={onDec} accessibilityLabel="Kurangi jumlah" />
-          <Text className="min-w-[28px] text-center font-dm-bold text-sm text-foreground dark:text-stone-50">
-            {item.quantity}
-          </Text>
-          <IconButton icon={Plus} size="sm" variant="outline" onPress={onInc} accessibilityLabel="Tambah jumlah" />
+          <IconButton
+            icon={Minus}
+            size="sm"
+            variant="outline"
+            onPress={onDec}
+            accessibilityLabel="Kurangi jumlah"
+          />
+
+          <TextInput
+            value={draft}
+            onChangeText={handleChange}
+            onFocus={() => setFocused(true)}
+            onBlur={handleBlur}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            selectTextOnFocus
+            maxLength={4}
+            accessibilityLabel="Jumlah item, ketik untuk mengubah"
+            className="h-8 w-12 rounded-lg border border-border/60 bg-white p-0 text-center font-dm-bold text-sm leading-8 text-foreground dark:border-stone-700/60 dark:bg-stone-900 dark:text-stone-50"
+            style={{ paddingTop: 0, paddingBottom: 0, textAlignVertical: 'center' }}
+          />
+
+          <IconButton
+            icon={Plus}
+            size="sm"
+            variant="outline"
+            onPress={onInc}
+            accessibilityLabel="Tambah jumlah"
+          />
         </View>
       </View>
 
       <View className="items-end justify-between">
-        <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel="Hapus dari keranjang" className="p-0.5">
-          <Icon as={Trash2} size={15} className="text-destructive/70 dark:text-red-400/70" />
+        <Pressable
+          onPress={onRemove}
+          hitSlop={8}
+          accessibilityLabel="Hapus dari keranjang"
+          className="p-0.5"
+        >
+          <Icon
+            as={Trash2}
+            size={15}
+            className="text-destructive/70 dark:text-red-400/70"
+          />
         </Pressable>
         <Text className="font-dm-bold text-[13px] text-foreground dark:text-stone-50">
           {formatRupiah(lineTotal)}

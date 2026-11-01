@@ -1,7 +1,7 @@
 {
   "name": "latea-pos-mobile",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "7.3.2",
   "scripts": {
     "dev": "expo start -c",
     "android": "expo start -c --android",
@@ -15,6 +15,7 @@
     "@expo-google-fonts/dm-sans": "^0.4.2",
     "@expo-google-fonts/inter": "^0.4.2",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "12.0.1",
     "@rn-primitives/label": "^1.5.2",
     "@rn-primitives/portal": "~1.4.0",
     "@rn-primitives/slot": "^1.5.2",
@@ -26,6 +27,7 @@
     "expo-blur": "~57.0.3",
     "expo-constants": "~57.0.19",
     "expo-font": "~57.0.4",
+    "expo-keep-awake": "~57.0.2",
     "expo-linear-gradient": "~57.0.2",
     "expo-linking": "~57.0.13",
     "expo-router": "~57.0.29",

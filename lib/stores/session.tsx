@@ -1,6 +1,7 @@
 import * as React from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api/client';
+import { api, setAuthErrorHandler } from '@/lib/api/client';
 import { tokenStorage } from '@/lib/utils/storage';
 
 export type User = {
@@ -10,6 +11,7 @@ export type User = {
   role: string;
   store_id: number | null;
   store: { id: number; name: string; code: string; location: string } | null;
+  avatar_url?: string | null;
 };
 
 type SessionState = {
@@ -26,6 +28,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = React.useState(true);
   const queryClient = useQueryClient();
 
+  /* ── Restore session saat app pertama dibuka ── */
   React.useEffect(() => {
     let mounted = true;
     (async () => {
@@ -45,6 +48,46 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  /* ⭐ 401 dari axios → auto-logout + clear cache */
+  React.useEffect(() => {
+    setAuthErrorHandler(() => {
+      queryClient.clear();
+      setUser(null);
+    });
+    return () => setAuthErrorHandler(null);
+  }, [queryClient]);
+
+  /* ⭐ Re-validate saat app kembali ke foreground */
+  React.useEffect(() => {
+    if (!user) return;
+
+    const sub = AppState.addEventListener(
+      'change',
+      async (state: AppStateStatus) => {
+        if (state !== 'active') return;
+
+        try {
+          const token = await tokenStorage.get();
+          if (!token) {
+            setUser(null);
+            queryClient.clear();
+            return;
+          }
+          const res = await api.get<User>('/me');
+          setUser(res.data);
+        } catch (err: any) {
+          if (err?.response?.status === 401) {
+            await tokenStorage.clear();
+            queryClient.clear();
+            setUser(null);
+          }
+          // Error non-401 (network, timeout) → diamkan, biarkan user retry
+        }
+      },
+    );
+    return () => sub.remove();
+  }, [user, queryClient]);
+
   const signIn = React.useCallback(
     async (email: string, password: string) => {
       const res = await api.post<{ token: string; user: User }>('/login', {
@@ -55,7 +98,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       queryClient.clear();
       setUser(res.data.user);
     },
-    [queryClient], // ⭐ fix stale closure
+    [queryClient],
   );
 
   const signOut = React.useCallback(async () => {
@@ -68,7 +111,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       queryClient.clear();
       setUser(null);
     }
-  }, [queryClient]); // ⭐ fix stale closure
+  }, [queryClient]);
 
   const value = React.useMemo(
     () => ({ user, isLoading, signIn, signOut }),

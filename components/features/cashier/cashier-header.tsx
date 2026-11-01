@@ -3,6 +3,7 @@ import { Text } from '@/components/ui/text';
 import { ArrowLeft } from 'lucide-react-native';
 import { GlassHeader } from '@/components/layout/glass-header';
 import { IconButton } from '@/components/ui/icon-button';
+import { NetworkStatus } from '@/components/common/network-status';
 
 export function CashierHeader({
   isEditMode,
@@ -28,6 +29,7 @@ export function CashierHeader({
             : 'Tap produk untuk menambah ke keranjang'}
         </Text>
       </View>
+      <NetworkStatus />
     </GlassHeader>
   );
 }

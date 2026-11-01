@@ -21,6 +21,7 @@ type CartState = {
   removeItem: (productId: number) => void;
   increment: (productId: number) => void;
   decrement: (productId: number) => void;
+  setQuantity: (productId: number, quantity: number) => void;
   clear: () => void;
   setItems: (items: CartItem[]) => void;
 };
@@ -98,6 +99,15 @@ export const useCart = create<CartState>((set) => ({
         )
         .filter((i) => i.quantity > 0),
     })),
+
+  setQuantity: (productId, quantity) => {
+    const safeQty = Math.max(1, Math.floor(quantity)); // clamp min 1
+    set((state) => ({
+      items: state.items.map((i) =>
+        i.productId === productId ? { ...i, quantity: safeQty } : i,
+      ),
+    }));
+  },
 
   clear: () => set({ items: [] }),
   setItems: (items) => set({ items }),

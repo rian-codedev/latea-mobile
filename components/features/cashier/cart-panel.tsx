@@ -22,6 +22,7 @@ export function CartPanel({
   const items = useCart((s) => s.items);
   const increment = useCart((s) => s.increment);
   const decrement = useCart((s) => s.decrement);
+  const setQuantity = useCart((s) => s.setQuantity);
   const removeItem = useCart((s) => s.removeItem);
   const clear = useCart((s) => s.clear);
 
@@ -80,6 +81,7 @@ export function CartPanel({
                 item={item}
                 onInc={() => increment(item.productId)}
                 onDec={() => decrement(item.productId)}
+                onChangeQty={(qty) => setQuantity(item.productId, qty)} // ⭐ NEW
                 onRemove={() => removeItem(item.productId)}
               />
             )}
@@ -91,31 +93,43 @@ export function CartPanel({
         className="border-t border-border/40 bg-muted/40 px-4 pt-3 dark:border-stone-800/60 dark:bg-stone-800/30"
         style={{ paddingBottom: Math.max(bottomInset, 12) }}
       >
-        <View className="mb-3 gap-1.5">
-          <View className="flex-row justify-between">
+        <View className="gap-1.5 mb-3">
+          <View className="flex-row items-center justify-between gap-3">
             <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
               Subtotal
             </Text>
-            <Text className="font-dm-medium text-xs text-foreground dark:text-stone-50">
+            <Text
+              className="shrink-0 font-dm-medium text-xs text-foreground dark:text-stone-50"
+              numberOfLines={1}
+            >
               {formatRupiah(subtotal)}
             </Text>
           </View>
+
           {discount > 0 ? (
-            <View className="flex-row justify-between">
+            <View className="flex-row items-center justify-between gap-3">
               <Text className="font-dm-regular text-xs text-destructive dark:text-red-400">
                 Diskon
               </Text>
-              <Text className="font-dm-medium text-xs text-destructive dark:text-red-400">
+              <Text
+                className="shrink-0 font-dm-medium text-xs text-destructive dark:text-red-400"
+                numberOfLines={1}
+              >
                 -{formatRupiah(discount)}
               </Text>
             </View>
           ) : null}
+
           <View className="my-1 h-px bg-border/60 dark:bg-stone-700/60" />
-          <View className="flex-row items-center justify-between">
+
+          <View className="flex-row items-center justify-between gap-3">
             <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
               Total
             </Text>
-            <Text className="font-dm-extrabold text-xl leading-none tracking-tight text-primary dark:text-sage-400">
+            <Text
+              className="shrink-0 font-dm-extrabold text-2xl leading-none tracking-tight text-primary dark:text-sage-400"
+              numberOfLines={1}
+            >
               {formatRupiah(total)}
             </Text>
           </View>
