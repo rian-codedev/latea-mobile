@@ -3,8 +3,6 @@ import { View, TextInput, FlatList, Modal, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Search, X } from 'lucide-react-native';
-
-import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import { useResponsive, getGridColumns } from '@/lib/hooks/use-responsive';
 import { useProducts } from '@/lib/hooks/use-products';
@@ -13,7 +11,6 @@ import type { ApiProduct } from '@/lib/api/product';
 import { useCart, calcTotals, type CartItem } from '@/lib/stores/cart';
 import { useSession } from '@/lib/stores/session';
 import { ROUTES } from '@/lib/constants/app';
-
 import { Screen } from '@/components/layout/screen';
 import { LoadingOverlay } from '@/components/feedback/loading-overlay';
 import { SuccessToast } from '@/components/feedback/success-toast';
