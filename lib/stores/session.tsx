@@ -17,6 +17,8 @@ export type User = {
 type SessionState = {
   user: User | null;
   isLoading: boolean;
+  authExpired: boolean;
+  clearAuthExpired: () => void;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -26,38 +28,61 @@ const SessionContext = React.createContext<SessionState | null>(null);
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [authExpired, setAuthExpired] = React.useState(false);
   const queryClient = useQueryClient();
 
-  /* ── Restore session saat app pertama dibuka ── */
+  /* ⭐ Reset terpusat — dipakai di semua jalur auth failure */
+  const resetSession = React.useCallback(
+    (expired: boolean) => {
+      queryClient.clear();
+      setUser(null);
+      if (expired) setAuthExpired(true);
+    },
+    [queryClient],
+  );
+
+  /* ── Restore session saat app start ── */
   React.useEffect(() => {
     let mounted = true;
+
     (async () => {
       const token = await tokenStorage.get();
-      if (token) {
-        try {
-          const res = await api.get<User>('/me');
-          if (mounted) setUser(res.data);
-        } catch {
-          await tokenStorage.clear();
-        }
+      if (!token) {
+        if (mounted) setIsLoading(false);
+        return;
       }
-      if (mounted) setIsLoading(false);
+
+      try {
+        // ⭐ FIX: /me return { user: {...} }, bukan user langsung
+        const res = await api.get<{ user: User }>('/me');
+        if (mounted) setUser(res.data.user);
+      } catch (err: any) {
+        const status = err?.response?.status;
+        if (status === 401) {
+          await tokenStorage.clear();
+          if (mounted) setAuthExpired(true);
+        }
+        // Network error (bukan 401) → biarkan token, user null
+        // (login screen akan muncul; token akan diganti saat signIn)
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
     })();
+
     return () => {
       mounted = false;
     };
   }, []);
 
-  /* ⭐ 401 dari axios → auto-logout + clear cache */
+  /* ── 401 global dari axios → auto-logout + toast ── */
   React.useEffect(() => {
     setAuthErrorHandler(() => {
-      queryClient.clear();
-      setUser(null);
+      resetSession(true);
     });
     return () => setAuthErrorHandler(null);
-  }, [queryClient]);
+  }, [resetSession]);
 
-  /* ⭐ Re-validate saat app kembali ke foreground */
+  /* ── Re-validate saat app kembali ke foreground ── */
   React.useEffect(() => {
     if (!user) return;
 
@@ -69,24 +94,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         try {
           const token = await tokenStorage.get();
           if (!token) {
-            setUser(null);
-            queryClient.clear();
+            resetSession(true);
             return;
           }
-          const res = await api.get<User>('/me');
-          setUser(res.data);
+          // ⭐ FIX: parsing benar
+          const res = await api.get<{ user: User }>('/me');
+          setUser(res.data.user);
         } catch (err: any) {
           if (err?.response?.status === 401) {
             await tokenStorage.clear();
-            queryClient.clear();
-            setUser(null);
+            resetSession(true);
           }
-          // Error non-401 (network, timeout) → diamkan, biarkan user retry
+          // Network error saat resume → jangan logout paksa
         }
       },
     );
+
     return () => sub.remove();
-  }, [user, queryClient]);
+  }, [user, resetSession]);
+
+  const clearAuthExpired = React.useCallback(() => {
+    setAuthExpired(false);
+  }, []);
 
   const signIn = React.useCallback(
     async (email: string, password: string) => {
@@ -96,6 +125,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       });
       await tokenStorage.set(res.data.token);
       queryClient.clear();
+      setAuthExpired(false);
       setUser(res.data.user);
     },
     [queryClient],
@@ -109,13 +139,21 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     } finally {
       await tokenStorage.clear();
       queryClient.clear();
+      setAuthExpired(false); // logout manual ≠ sesi habis
       setUser(null);
     }
   }, [queryClient]);
 
   const value = React.useMemo(
-    () => ({ user, isLoading, signIn, signOut }),
-    [user, isLoading, signIn, signOut],
+    () => ({
+      user,
+      isLoading,
+      authExpired,
+      clearAuthExpired,
+      signIn,
+      signOut,
+    }),
+    [user, isLoading, authExpired, clearAuthExpired, signIn, signOut],
   );
 
   return (

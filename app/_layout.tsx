@@ -7,6 +7,7 @@ import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import {
@@ -18,10 +19,10 @@ import {
 } from '@expo-google-fonts/dm-sans';
 
 import { NAV_THEME } from '@/lib/theme/navigation';
-import { SessionProvider } from '@/lib/stores/session';
+import { SessionProvider, useSession } from '@/lib/stores/session';
 import { useFirstLaunch } from '@/lib/hooks/use-first-launch';
 import { LoadingSplash } from '@/components/feedback/loading-splash';
-import { AxiosError } from 'axios';
+import { AuthExpiredToast } from '@/components/feedback/auth-expired-toast';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,7 +33,6 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 1000 * 60 * 5,
       retry: (failureCount, error) => {
-        // ⭐ Jangan retry 401/403 — token salah, retry tidak akan berhasil
         if (error instanceof AxiosError) {
           const status = error.response?.status;
           if (status === 401 || status === 403) return false;
@@ -46,6 +46,7 @@ const queryClient = new QueryClient({
 function RootNavigator() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { authExpired, clearAuthExpired } = useSession();
 
   const [fontsLoaded] = useFonts({
     DMSans_400Regular,
@@ -87,6 +88,12 @@ function RootNavigator() {
         </Stack>
         <PortalHost />
       </ThemeProvider>
+
+      {/* ⭐ Toast global — di luar Stack agar tampil di atas semua screen */}
+      <AuthExpiredToast
+        visible={authExpired}
+        onHide={clearAuthExpired}
+      />
     </>
   );
 }
