@@ -2,7 +2,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { tokenStorage } from '@/lib/utils/storage';
 
 const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000/api/mobile';
+  process.env.EXPO_PUBLIC_API_URL ?? 'https://bumpal.annuqayahlatee.id/api/mobile';
 
 export const api = axios.create({
   baseURL: BASE_URL,
