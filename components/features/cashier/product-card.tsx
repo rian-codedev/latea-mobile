@@ -1,9 +1,18 @@
+import { useCallback } from 'react';
 import { Pressable, View, Text as RNText, Image } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { formatRupiah } from '@/lib/utils/format';
 import type { ApiProduct } from '@/lib/api/product';
 import { PRODUCT_CARD_HEIGHT, PRODUCT_IMAGE_HEIGHT } from '@/lib/theme/sizing';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export function ProductCard({
   product,
@@ -18,13 +27,29 @@ export function ProductCard({
     product.discount_price != null && product.minimal_discount != null;
   const inCart = qty > 0;
 
+  const pressed = useSharedValue(0);
+
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 - pressed.value * 0.015 }],
+    opacity: 1 - pressed.value * 0.06,
+  }));
+
+  const handlePressIn = useCallback(() => {
+    pressed.value = withTiming(1, { duration: 60 });
+  }, [pressed]);
+
+  const handlePressOut = useCallback(() => {
+    pressed.value = withTiming(0, { duration: 100 });
+  }, [pressed]);
+
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
-      style={({ pressed }) => ({
-        height: PRODUCT_CARD_HEIGHT,
-        transform: [{ scale: pressed ? 0.97 : 1 }],
-      })}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      accessibilityRole="button"
+      accessibilityLabel={`${product.name}${inCart ? `, ${qty} di keranjang` : ''}`}
+      style={[{ height: PRODUCT_CARD_HEIGHT }, cardStyle]}
       className={`flex-1 overflow-hidden rounded-2xl border-[1.5px] bg-white dark:bg-stone-900 ${
         inCart
           ? 'border-primary dark:border-sage-500'
@@ -88,6 +113,6 @@ export function ProductCard({
           ) : null}
         </View>
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }

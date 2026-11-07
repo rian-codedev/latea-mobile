@@ -137,7 +137,9 @@ export function CartPanel({
 
         <Button
           label="Bayar"
-          onPress={onCheckout}
+          onPress={() => {
+            onCheckout();
+          }}
           disabled={isEmpty}
           fullWidth
         />

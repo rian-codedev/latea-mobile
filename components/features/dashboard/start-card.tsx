@@ -6,6 +6,7 @@ import { ShoppingCart, Package, Tag } from 'lucide-react-native';
 import { GradientBackdrop } from '@/components/layout/gradient-backdrop';
 import { welcomeGradients } from '@/lib/theme/gradients';
 import { Pill } from '@/components/common/pill';
+import { Button } from '@/components/ui/button';
 
 export function StartCard({
   onPress,
@@ -57,17 +58,12 @@ export function StartCard({
         </Text>
 
         <View className="mt-6 flex-row flex-wrap items-center gap-3">
-          <Pressable
+          <Button
+            label="Buka Kasir"
+            icon={ShoppingCart}
             onPress={onPress}
-            accessibilityRole="button"
             accessibilityLabel="Mulai transaksi"
-            className="h-12 flex-row items-center gap-2 rounded-full bg-primary px-5 active:opacity-90 dark:bg-sage-500"
-          >
-            <Icon as={ShoppingCart} size={17} className="text-primary-foreground" />
-            <Text className="font-dm-bold text-sm text-primary-foreground">
-              Buka kasir
-            </Text>
-          </Pressable>
+          />
 
           <View className="flex-row items-center gap-2">
             <Pill icon={Package} text={`${activeProducts} produk`} />
