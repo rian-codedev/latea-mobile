@@ -3,7 +3,11 @@ import { View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import { CountBadge } from '@/components/ui/badge';
-import { Store as StoreIcon, ChevronDown, ChevronUp } from 'lucide-react-native';
+import {
+  Store as StoreIcon,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react-native';
 import { ProductImage } from '@/components/common/product-image';
 import { formatRupiah } from '@/lib/utils/format';
 import type { ApiProduct } from '@/lib/api/product';
@@ -16,7 +20,9 @@ export function ProductListCard({ products }: { products: ApiProduct[] }) {
 
   const toggle = useCallback(() => setIsExpanded((p) => !p), []);
 
-  const displayed = isExpanded ? products : products.slice(0, INITIAL_COUNT);
+  const displayed = isExpanded
+    ? products
+    : products.slice(0, INITIAL_COUNT);
   const hasMore = products.length > INITIAL_COUNT;
 
   return (
@@ -24,26 +30,44 @@ export function ProductListCard({ products }: { products: ApiProduct[] }) {
       <Pressable
         onPress={toggle}
         accessibilityRole="button"
-        accessibilityLabel={isExpanded ? 'Tutup daftar produk' : 'Buka daftar produk'}
-        className="flex-row items-center justify-between px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40"
+        accessibilityLabel={
+          isExpanded ? 'Tutup daftar produk' : 'Buka daftar produk'
+        }
+        className="flex-row items-center gap-2.5 border-b border-border/40 px-4 py-3 active:bg-muted/40 dark:border-stone-800/60 dark:active:bg-stone-800/40"
       >
-        <View className="flex-row items-center gap-2">
-          <Icon as={StoreIcon} size={15} className="text-primary dark:text-sage-400" />
+        <View className="size-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-950/60">
+          <Icon
+            as={StoreIcon}
+            size={15}
+            className="text-blue-700 dark:text-blue-400"
+          />
+        </View>
+        <View className="flex-1">
           <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
-            Produk di toko Anda
+            Produk di Toko
+          </Text>
+          <Text className="font-dm-regular text-[10.5px] text-muted-foreground dark:text-stone-400">
+            Katalog yang tersedia
           </Text>
         </View>
-
         <View className="flex-row items-center gap-2">
           {!isEmpty ? <CountBadge count={products.length} /> : null}
-          <View style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }}>
-            <Icon as={ChevronDown} size={16} className="text-muted-foreground dark:text-stone-400" />
+          <View
+            style={{
+              transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
+            }}
+          >
+            <Icon
+              as={ChevronDown}
+              size={16}
+              className="text-muted-foreground dark:text-stone-400"
+            />
           </View>
         </View>
       </Pressable>
 
       {isEmpty ? (
-        <View className="items-center gap-1 border-t border-border/40 px-4 py-10 dark:border-stone-800/60">
+        <View className="items-center gap-1 px-4 py-10">
           <Text className="text-3xl">📦</Text>
           <Text className="font-dm-semibold text-sm text-foreground dark:text-stone-50">
             Belum ada produk
@@ -53,19 +77,28 @@ export function ProductListCard({ products }: { products: ApiProduct[] }) {
           </Text>
         </View>
       ) : (
-        <View className="border-t border-border/40 dark:border-stone-800/60">
+        <View>
           {displayed.map((p, i) => {
-            const hasPromo = p.discount_price != null && p.minimal_discount != null;
-            const displayPrice = hasPromo ? p.discount_price! : p.price;
+            const hasPromo =
+              p.discount_price != null && p.minimal_discount != null;
+            const displayPrice = hasPromo
+              ? p.discount_price!
+              : p.price;
 
             return (
               <View
                 key={p.id}
                 className={`flex-row items-center gap-3 px-4 py-2.5 ${
-                  i < displayed.length - 1 ? 'border-b border-border/30 dark:border-stone-800/40' : ''
+                  i < displayed.length - 1
+                    ? 'border-b border-border/30 dark:border-stone-800/40'
+                    : ''
                 }`}
               >
-                <ProductImage uri={p.image_url} emoji={p.emoji} size={48} />
+                <ProductImage
+                  uri={p.image_url}
+                  emoji={p.emoji}
+                  size={44}
+                />
                 <View className="flex-1">
                   <Text
                     className="font-dm-semibold text-[12px] leading-tight text-foreground dark:text-stone-50"
@@ -110,10 +143,12 @@ export function ProductListCard({ products }: { products: ApiProduct[] }) {
           {hasMore && (
             <Pressable
               onPress={toggle}
-              className="flex-row items-center justify-center gap-1 border-t border-border/40 bg-muted/20 py-2.5 active:bg-muted/50 dark:border-stone-800/60 dark:bg-stone-800/20 dark:active:bg-stone-800/40"
+              className="flex-row items-center justify-center gap-1 border-t border-border/40 bg-muted/20 py-2.5 active:bg-muted/50 dark:border-stone-800/60 dark:bg-stone-800/20"
             >
               <Text className="font-dm-semibold text-[11px] text-primary dark:text-sage-400">
-                {isExpanded ? 'Sembunyikan' : `Lihat ${products.length - INITIAL_COUNT} produk lainnya`}
+                {isExpanded
+                  ? 'Sembunyikan'
+                  : `Lihat ${products.length - INITIAL_COUNT} produk lainnya`}
               </Text>
               <Icon
                 as={isExpanded ? ChevronUp : ChevronDown}

@@ -12,9 +12,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Banknote,
-  Receipt,
-  Package,
+  Wallet,
+  ArrowLeftRight,
+  ShoppingBag,
   AlertTriangle,
   Trash2,
   LogOut,
@@ -57,7 +57,9 @@ export default function DashboardScreen() {
   const { user, signOut } = useSession();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [selectedSaleId, setSelectedSaleId] = useState<number | null>(null);
+  const [selectedSaleId, setSelectedSaleId] = useState<number | null>(
+    null,
+  );
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -73,12 +75,15 @@ export default function DashboardScreen() {
   }, []);
 
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
-      if (s === 'active') {
-        setNow(new Date());
-        queryClient.invalidateQueries({ queryKey: ['sales'] });
-      }
-    });
+    const sub = AppState.addEventListener(
+      'change',
+      (s: AppStateStatus) => {
+        if (s === 'active') {
+          setNow(new Date());
+          queryClient.invalidateQueries({ queryKey: ['sales'] });
+        }
+      },
+    );
     return () => sub.remove();
   }, [queryClient]);
 
@@ -115,7 +120,9 @@ export default function DashboardScreen() {
     refetchInterval: 60000,
   });
 
-  const serverTime = salesToday?.meta?.server_time as ServerTime | undefined;
+  const serverTime = salesToday?.meta?.server_time as
+    | ServerTime
+    | undefined;
   const timeLabel =
     serverTime?.time ??
     now.toLocaleTimeString('id-ID', {
@@ -154,7 +161,9 @@ export default function DashboardScreen() {
 
   const recent = useMemo(
     () =>
-      (salesToday?.data ?? []).filter((s) => s.status === 'completed'),
+      (salesToday?.data ?? []).filter(
+        (s) => s.status === 'completed',
+      ),
     [salesToday],
   );
 
@@ -251,6 +260,7 @@ export default function DashboardScreen() {
         <View
           className={isWide ? 'flex-row items-start gap-4' : 'gap-4'}
         >
+          {/* ═══ Kolom Kiri / Utama ═══ */}
           <View className={isWide ? 'flex-[3] gap-4' : 'gap-4'}>
             <StartCard
               onPress={() => router.push(ROUTES.cashier)}
@@ -259,29 +269,41 @@ export default function DashboardScreen() {
               promoProducts={promoProducts}
               large={isWide}
             />
-            <View className="flex-row flex-wrap gap-3">
+
+            {/* Stats — 1 wide (penjualan) + 2 compact sejajar */}
+            <View className="gap-3">
               <StatCard
-                icon={Banknote}
-                label="Penjualan hari ini"
+                icon={Wallet}
+                label="Penjualan Hari Ini"
                 value={formatRupiah(todayStats.salesTotal)}
+                tone="green"
                 wide
               />
-              <StatCard
-                icon={Receipt}
-                label="Transaksi"
-                value={String(todayStats.transactions)}
-              />
-              <StatCard
-                icon={Package}
-                label="Item terjual"
-                value={String(todayStats.itemsSold)}
-              />
+              <View className="flex-row gap-3">
+                <StatCard
+                  icon={ArrowLeftRight}
+                  label="Transaksi"
+                  value={String(todayStats.transactions)}
+                  tone="amber"
+                />
+                <StatCard
+                  icon={ShoppingBag}
+                  label="Item Terjual"
+                  value={String(todayStats.itemsSold)}
+                  tone="blue"
+                />
+              </View>
             </View>
-            <ProductSalesCard products={productSummary} />
+
+            <RecentCard
+              sales={recent}
+              onSalePress={setSelectedSaleId}
+            />
           </View>
 
+          {/* ═══ Kolom Kanan / Suplemen ═══ */}
           <View className={isWide ? 'flex-[2] gap-4' : 'gap-4'}>
-            <RecentCard sales={recent} onSalePress={setSelectedSaleId} />
+            <ProductSalesCard products={productSummary} />
             <ProductListCard products={products} />
           </View>
         </View>
@@ -298,7 +320,9 @@ export default function DashboardScreen() {
 
       {/* Detail — loading/error modal */}
       <BaseModal
-        visible={!!selectedSaleId && (isLoadingDetail || isDetailError)}
+        visible={
+          !!selectedSaleId && (isLoadingDetail || isDetailError)
+        }
         onClose={closeDetail}
       >
         {isLoadingDetail ? (

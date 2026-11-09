@@ -2,11 +2,15 @@ import { useMemo, useState, useCallback } from 'react';
 import { View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
-import { Package, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { TrendingUp, ChevronDown, ChevronUp } from 'lucide-react-native';
 import type { ProductSummaryItem } from '@/lib/api/sales';
 import { EmptyState } from '@/components/feedback/empty-state';
 
-export function ProductSalesCard({ products }: { products: ProductSummaryItem[] }) {
+export function ProductSalesCard({
+  products,
+}: {
+  products: ProductSummaryItem[];
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
   const INITIAL_COUNT = 4;
   const isEmpty = products.length === 0;
@@ -18,36 +22,47 @@ export function ProductSalesCard({ products }: { products: ProductSummaryItem[] 
     [products],
   );
 
-  const displayed = isExpanded ? products : products.slice(0, INITIAL_COUNT);
+  const displayed = isExpanded
+    ? products
+    : products.slice(0, INITIAL_COUNT);
   const hasMore = products.length > INITIAL_COUNT;
 
   return (
-    <View className="overflow-hidden rounded-xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
+    <View className="overflow-hidden rounded-2xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
       <Pressable
         onPress={toggle}
-        className="flex-row items-center justify-between border-b border-border/40 px-4 py-3 active:bg-muted/40 dark:border-stone-800/60 dark:active:bg-stone-800/40"
+        accessibilityRole="button"
+        accessibilityLabel={
+          isExpanded ? 'Tutup produk terjual' : 'Buka produk terjual'
+        }
+        className="flex-row items-center gap-2.5 border-b border-border/40 px-4 py-3 active:bg-muted/40 dark:border-stone-800/60 dark:active:bg-stone-800/40"
       >
-        <View className="flex-row items-center gap-2.5">
-          <View className="size-7 items-center justify-center rounded-lg bg-primary/10 dark:bg-sage-500/15">
-            <Icon as={Package} size={14} className="text-primary dark:text-sage-400" />
-          </View>
-          <View>
-            <Text className="font-dm-bold text-xs text-foreground dark:text-stone-50">
-              Produk Terjual
-            </Text>
-            <Text className="font-dm-regular text-[10px] text-muted-foreground dark:text-stone-400">
-              Terurut dari yang paling banyak
-            </Text>
-          </View>
+        <View className="size-8 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950/60">
+          <Icon
+            as={TrendingUp}
+            size={15}
+            className="text-emerald-700 dark:text-emerald-400"
+          />
         </View>
-
+        <View className="flex-1">
+          <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
+            Produk Terjual
+          </Text>
+          <Text className="font-dm-regular text-[10.5px] text-muted-foreground dark:text-stone-400">
+            Terurut dari yang paling banyak
+          </Text>
+        </View>
         <View className="flex-row items-center gap-2">
           <View className="rounded-full bg-muted px-2 py-0.5 dark:bg-stone-800">
             <Text className="font-mono text-[10px] font-bold text-muted-foreground dark:text-stone-400">
               {products.length}
             </Text>
           </View>
-          <View style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }}>
+          <View
+            style={{
+              transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
+            }}
+          >
             <Icon
               as={ChevronDown}
               size={16}
@@ -58,7 +73,10 @@ export function ProductSalesCard({ products }: { products: ProductSummaryItem[] 
       </Pressable>
 
       {isEmpty ? (
-        <EmptyState emoji="📊" title="Belum ada produk terjual hari ini" />
+        <EmptyState
+          emoji="📊"
+          title="Belum ada produk terjual hari ini"
+        />
       ) : (
         <View>
           {displayed.map((product, index) => {
@@ -115,11 +133,14 @@ export function ProductSalesCard({ products }: { products: ProductSummaryItem[] 
                     <View className="h-1 flex-1 overflow-hidden rounded-full bg-muted dark:bg-stone-800">
                       <View
                         style={{ width: `${percentage}%` }}
-                        className="h-full rounded-full bg-primary dark:bg-sage-400"
+                        className="h-full rounded-full bg-emerald-500 dark:bg-emerald-400"
                       />
                     </View>
                     <Text className="shrink-0 font-mono text-[10px] text-muted-foreground dark:text-stone-400">
-                      Rp {Number(product.total_revenue).toLocaleString('id-ID')}
+                      Rp{' '}
+                      {Number(
+                        product.total_revenue,
+                      ).toLocaleString('id-ID')}
                     </Text>
                   </View>
                 </View>
