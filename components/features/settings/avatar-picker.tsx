@@ -12,20 +12,23 @@ export function AvatarPicker({
   currentUri,
   fallbackInitial,
   size = 96,
+  disabled = false,
   onPicked,
 }: {
   currentUri?: string | null;
   fallbackInitial: string;
   size?: number;
+  disabled?: boolean;
   onPicked: (file: PickedAvatar | null) => void;
 }) {
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
 
   const displayUri = localUri ?? currentUri;
+  const badgeSize = Math.max(28, Math.round(size * 0.28));
 
   async function handlePick() {
-    if (isPicking) return;
+    if (isPicking || disabled) return;
 
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
@@ -34,7 +37,7 @@ export function AvatarPicker({
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],  // ✅
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 1,
@@ -70,30 +73,57 @@ export function AvatarPicker({
   return (
     <Pressable
       onPress={handlePick}
-      disabled={isPicking}
+      disabled={isPicking || disabled}
       accessibilityRole="button"
       accessibilityLabel="Foto profil. Tap untuk mengganti"
       accessibilityHint="Membuka galeri foto"
-      className="relative self-center"
+      // Padding 6px memberi ruang badge di luar lingkaran avatar
+      style={{ padding: 6 }}
+      className="self-center"
     >
-      <UserAvatar
-        name={fallbackInitial}
-        uri={displayUri}
-        size={size}
-      />
+      <View style={{ width: size, height: size }}>
+        <UserAvatar
+          name={fallbackInitial}
+          uri={displayUri}
+          size={size}
+          showRing={false} // ⭐ no ring — biar ukuran visual full size
+        />
 
-      {isPicking ? (
-        <View
-          className="absolute inset-0 items-center justify-center rounded-full bg-black/40"
-          style={{ width: size, height: size }}
-        >
-          <ActivityIndicator color="#FFFFFF" />
-        </View>
-      ) : (
-        <View className="absolute -bottom-0.5 -right-0.5 size-8 items-center justify-center rounded-full border-2 border-white bg-primary dark:border-stone-900 dark:bg-sage-500">
-          <Icon as={Camera} size={14} className="text-primary-foreground" />
-        </View>
-      )}
+        {isPicking ? (
+          <View
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+            }}
+            className="items-center justify-center bg-black/40"
+          >
+            <ActivityIndicator color="#FFFFFF" />
+          </View>
+        ) : (
+          // Badge posisinya clean di luar, tidak memotong avatar
+          <View
+            style={{
+              position: 'absolute',
+              width: badgeSize,
+              height: badgeSize,
+              bottom: -6,
+              right: -6,
+              borderRadius: badgeSize / 2,
+              borderWidth: 3,
+            }}
+            className="items-center justify-center border-white bg-primary dark:border-stone-900 dark:bg-sage-500"
+          >
+            <Icon
+              as={Camera}
+              size={Math.round(badgeSize * 0.45)}
+              className="text-primary-foreground"
+            />
+          </View>
+        )}
+      </View>
     </Pressable>
   );
 }
