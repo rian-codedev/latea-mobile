@@ -13,5 +13,7 @@ export const ROUTES = {
   cashierEdit: (saleId: number) =>
     `/(app)/cashier?editSaleId=${saleId}` as Href,
   settings: '/(app)/settings' as Href,
+  settingsAccount: '/(app)/settings/account' as Href,
+  settingsChangePassword: '/(app)/settings/change-password' as Href,
   settingsAbout: '/(app)/settings/about' as Href,
 };

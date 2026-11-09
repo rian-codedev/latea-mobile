@@ -15,7 +15,7 @@ export type User = {
     name: string;
     code: string;
     location: string;
-    avatar_url?: string | null; // ⭐ NEW
+    avatar_url?: string | null;
   } | null;
   avatar_url?: string | null;
 };
@@ -25,8 +25,10 @@ type SessionState = {
   isLoading: boolean;
   authExpired: boolean;
   clearAuthExpired: () => void;
+  setUser: (user: User) => void;                    // ⭐ NEW
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  signOutLocally: () => Promise<void>;              // ⭐ NEW
 };
 
 const SessionContext = React.createContext<SessionState | null>(null);
@@ -46,6 +48,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [queryClient],
   );
 
+  /* ── Restore session ── */
   React.useEffect(() => {
     let mounted = true;
     (async () => {
@@ -71,6 +74,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  /* ── 401 handler ── */
   React.useEffect(() => {
     setAuthErrorHandler(() => {
       resetSession(true);
@@ -78,6 +82,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return () => setAuthErrorHandler(null);
   }, [resetSession]);
 
+  /* ── Re-validate on foreground ── */
   React.useEffect(() => {
     if (!user) return;
     const sub = AppState.addEventListener(
@@ -107,6 +112,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setAuthExpired(false);
   }, []);
 
+  const updateUser = React.useCallback((nextUser: User) => {
+    setUser(nextUser);
+  }, []);
+
   const signIn = React.useCallback(
     async (email: string, password: string) => {
       const res = await api.post<{ token: string; user: User }>('/login', {
@@ -134,16 +143,38 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   }, [queryClient]);
 
+  /**
+   * Logout lokal tanpa API call + tanpa toast.
+   * Dipakai setelah ubah password berhasil (backend sudah hapus token).
+   */
+  const signOutLocally = React.useCallback(async () => {
+    await tokenStorage.clear();
+    queryClient.clear();
+    setAuthExpired(false);
+    setUser(null);
+  }, [queryClient]);
+
   const value = React.useMemo(
     () => ({
       user,
       isLoading,
       authExpired,
       clearAuthExpired,
+      setUser: updateUser,
       signIn,
       signOut,
+      signOutLocally,
     }),
-    [user, isLoading, authExpired, clearAuthExpired, signIn, signOut],
+    [
+      user,
+      isLoading,
+      authExpired,
+      clearAuthExpired,
+      updateUser,
+      signIn,
+      signOut,
+      signOutLocally,
+    ],
   );
 
   return (

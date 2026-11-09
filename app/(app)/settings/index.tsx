@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, View, Image } from 'react-native';
+import { ScrollView, View, Image, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Palette,
   Wallet,
+  ChevronRight,
 } from 'lucide-react-native';
 
 import { Text } from '@/components/ui/text';
@@ -71,10 +72,8 @@ export default function SettingsScreen() {
 
   const handleKeepAwakeToggle = (value: boolean) => {
     if (value) {
-      // Aktifkan → butuh konfirmasi
       setKeepAwakeConfirmOpen(true);
     } else {
-      // Nonaktifkan → langsung
       setKeepAwakeEnabled(false);
     }
   };
@@ -85,12 +84,9 @@ export default function SettingsScreen() {
   };
 
   const handleQuickPayToggle = (value: boolean) => {
-    // value = mode cepat aktif?
     if (value) {
-      // Aktifkan mode cepat (matikan modal) → butuh konfirmasi
       setQuickPayConfirmOpen(true);
     } else {
-      // Nonaktifkan mode cepat (aktifkan modal) → langsung
       setCheckoutModalEnabled(true);
     }
   };
@@ -111,8 +107,13 @@ export default function SettingsScreen() {
           gap: 20,
         }}
       >
-        {/* ═══ Card Profil (display only, Fase 2 akan add onPress) ═══ */}
-        <View className="overflow-hidden rounded-2xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900">
+        {/* ═══ Card Profil — tap → Account ═══ */}
+        <Pressable
+          onPress={() => router.push(ROUTES.settingsAccount)}
+          accessibilityRole="button"
+          accessibilityLabel="Buka pengaturan akun"
+          className="overflow-hidden rounded-2xl border border-border/40 bg-white active:bg-muted/40 dark:border-stone-800/60 dark:bg-stone-900 dark:active:bg-stone-800/40"
+        >
           <View className="flex-row items-center gap-3 p-4">
             {user?.avatar_url ? (
               <Image
@@ -141,9 +142,13 @@ export default function SettingsScreen() {
                 {user?.email ?? '-'}
               </Text>
             </View>
+            <Icon
+              as={ChevronRight}
+              size={18}
+              className="text-muted-foreground/60 dark:text-stone-500/60"
+            />
           </View>
 
-          {/* Store row */}
           <View className="flex-row items-center gap-2.5 border-t border-border/40 px-4 py-2.5 dark:border-stone-800/60">
             {user?.store ? (
               <>
@@ -185,7 +190,7 @@ export default function SettingsScreen() {
               </>
             )}
           </View>
-        </View>
+        </Pressable>
 
         {/* ═══ Tampilan & Tema ═══ */}
         <SettingsSection title="Tampilan & Tema" icon={Palette}>
@@ -270,7 +275,6 @@ export default function SettingsScreen() {
         </View>
       </GlassHeader>
 
-      {/* Confirm: aktifkan keep-awake */}
       <ConfirmModal
         visible={keepAwakeConfirmOpen}
         icon={Monitor}
@@ -283,7 +287,6 @@ export default function SettingsScreen() {
         onCancel={() => setKeepAwakeConfirmOpen(false)}
       />
 
-      {/* Confirm: aktifkan mode cepat */}
       <ConfirmModal
         visible={quickPayConfirmOpen}
         icon={Zap}
