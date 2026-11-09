@@ -3,7 +3,7 @@ import '@/global.css';
 import { useEffect, useState } from 'react';
 import { ThemeProvider } from 'expo-router/react-navigation';
 import { PortalHost } from '@rn-primitives/portal';
-import { Stack, router } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -50,7 +50,7 @@ function RootNavigator() {
   const isDark = colorScheme === 'dark';
   const { authExpired, clearAuthExpired } = useSession();
 
-  useThemeSync(); // ⭐ Terapkan tema dari preferensi
+  useThemeSync();
 
   const [fontsLoaded] = useFonts({
     DMSans_400Regular,
@@ -72,13 +72,9 @@ function RootNavigator() {
     }
   }, [fontsLoaded, isFirstLaunch]);
 
-  useEffect(() => {
-    if (appReady && isFirstLaunch === true) {
-      router.replace('/(onboarding)' as any);
-    }
-  }, [appReady, isFirstLaunch]);
+  // ⭐ HAPUS effect router.replace('/(onboarding)')
+  // Redirect onboarding sekarang ditangani oleh (app)/_layout & (auth)/_layout
 
-  // ⭐ Gate: tunggu semua siap termasuk preferensi ter-hydrate
   if (!fontsLoaded || isFirstLaunch === null || !appReady || !prefsHydrated) {
     return <LoadingSplash />;
   }
