@@ -3,6 +3,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, setAuthErrorHandler } from '@/lib/api/client';
 import { tokenStorage } from '@/lib/utils/storage';
+import { useCart } from './cart';  // ⭐ NEW
 
 export type User = {
   id: number;
@@ -25,23 +26,29 @@ type SessionState = {
   isLoading: boolean;
   authExpired: boolean;
   clearAuthExpired: () => void;
-  setUser: (user: User) => void;                    // ⭐ NEW
+  setUser: (user: User) => void;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  signOutLocally: () => Promise<void>;              // ⭐ NEW
+  signOutLocally: () => Promise<void>;
 };
 
 const SessionContext = React.createContext<SessionState | null>(null);
 
-export function SessionProvider({ children }: { children: React.ReactNode }) {
+export function SessionProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [user, setUser] = React.useState<User | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [authExpired, setAuthExpired] = React.useState(false);
   const queryClient = useQueryClient();
 
+  /* ⭐ Reset terpusat — query + cart + user */
   const resetSession = React.useCallback(
     (expired: boolean) => {
       queryClient.clear();
+      useCart.getState().clear(); // ⭐ cart ikut dibersihkan
       setUser(null);
       if (expired) setAuthExpired(true);
     },
@@ -51,28 +58,31 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   /* ── Restore session ── */
   React.useEffect(() => {
     let mounted = true;
+
     (async () => {
       const token = await tokenStorage.get();
       if (!token) {
         if (mounted) setIsLoading(false);
         return;
       }
+
       try {
         const res = await api.get<{ user: User }>('/me');
         if (mounted) setUser(res.data.user);
       } catch (err: any) {
         if (err?.response?.status === 401) {
           await tokenStorage.clear();
-          if (mounted) setAuthExpired(true);
+          if (mounted) resetSession(true); // ⭐ via resetSession
         }
       } finally {
         if (mounted) setIsLoading(false);
       }
     })();
+
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [resetSession]);
 
   /* ── 401 handler ── */
   React.useEffect(() => {
@@ -85,10 +95,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   /* ── Re-validate on foreground ── */
   React.useEffect(() => {
     if (!user) return;
+
     const sub = AppState.addEventListener(
       'change',
       async (state: AppStateStatus) => {
         if (state !== 'active') return;
+
         try {
           const token = await tokenStorage.get();
           if (!token) {
@@ -105,6 +117,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         }
       },
     );
+
     return () => sub.remove();
   }, [user, resetSession]);
 
@@ -118,10 +131,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = React.useCallback(
     async (email: string, password: string) => {
-      const res = await api.post<{ token: string; user: User }>('/login', {
-        email,
-        password,
-      });
+      const res = await api.post<{ token: string; user: User }>(
+        '/login',
+        { email, password },
+      );
       await tokenStorage.set(res.data.token);
       queryClient.clear();
       setAuthExpired(false);
@@ -137,22 +150,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // diamkan — tetap bersihkan lokal
     } finally {
       await tokenStorage.clear();
-      queryClient.clear();
-      setAuthExpired(false);
-      setUser(null);
+      resetSession(false); // ⭐ query + cart + user
     }
-  }, [queryClient]);
+  }, [resetSession]);
 
   /**
    * Logout lokal tanpa API call + tanpa toast.
-   * Dipakai setelah ubah password berhasil (backend sudah hapus token).
+   * Dipakai setelah ubah password (backend sudah hapus semua token).
    */
   const signOutLocally = React.useCallback(async () => {
     await tokenStorage.clear();
-    queryClient.clear();
-    setAuthExpired(false);
-    setUser(null);
-  }, [queryClient]);
+    resetSession(false);
+  }, [resetSession]);
 
   const value = React.useMemo(
     () => ({
@@ -178,7 +187,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
+    <SessionContext.Provider value={value}>
+      {children}
+    </SessionContext.Provider>
   );
 }
 
