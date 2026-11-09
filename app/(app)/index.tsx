@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, RefreshControl, AppState, ActivityIndicator, Pressable, type AppStateStatus } from 'react-native';
+import {
+  View,
+  ScrollView,
+  RefreshControl,
+  AppState,
+  ActivityIndicator,
+  Pressable,
+  type AppStateStatus,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -40,14 +48,6 @@ import { RecentCard } from '@/components/features/dashboard/recent-card';
 import { ProductListCard } from '@/components/features/dashboard/product-list-card';
 import { ReceiptModal } from '@/components/features/sales/receipt-modal';
 
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 11) return 'Selamat pagi';
-  if (h < 15) return 'Selamat siang';
-  if (h < 18) return 'Selamat sore';
-  return 'Selamat malam';
-}
-
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { isWide } = useResponsive();
@@ -65,9 +65,7 @@ export default function DashboardScreen() {
   const [now, setNow] = useState(new Date());
 
   const storeId = user?.store_id;
-  const cashierName = user?.name ?? 'Kasir';
   const storeName = user?.store?.name ?? 'Toko';
-  const initial = cashierName.charAt(0).toUpperCase() || 'K';
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60000);
@@ -76,7 +74,10 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
-      if (s === 'active') queryClient.invalidateQueries({ queryKey: ['sales'] });
+      if (s === 'active') {
+        setNow(new Date());
+        queryClient.invalidateQueries({ queryKey: ['sales'] });
+      }
     });
     return () => sub.remove();
   }, [queryClient]);
@@ -90,7 +91,10 @@ export default function DashboardScreen() {
   const promoProducts = useMemo(
     () =>
       products.filter(
-        (p) => p.is_active && p.discount_price != null && p.minimal_discount != null,
+        (p) =>
+          p.is_active &&
+          p.discount_price != null &&
+          p.minimal_discount != null,
       ).length,
     [products],
   );
@@ -135,16 +139,22 @@ export default function DashboardScreen() {
         itemsSold: salesToday.metrics.my_items_sold,
       };
     }
-    const list = (salesToday?.data ?? []).filter((s) => s.status === 'completed');
+    const list = (salesToday?.data ?? []).filter(
+      (s) => s.status === 'completed',
+    );
     return {
       salesTotal: list.reduce((a, s) => a + s.total, 0),
       transactions: list.length,
-      itemsSold: list.reduce((a, s) => a + (s.total_quantity ?? 0), 0),
+      itemsSold: list.reduce(
+        (a, s) => a + (s.total_quantity ?? 0),
+        0,
+      ),
     };
   }, [salesToday]);
 
   const recent = useMemo(
-    () => (salesToday?.data ?? []).filter((s) => s.status === 'completed'),
+    () =>
+      (salesToday?.data ?? []).filter((s) => s.status === 'completed'),
     [salesToday],
   );
 
@@ -197,7 +207,9 @@ export default function DashboardScreen() {
     setIsRefreshing(true);
     try {
       await queryClient.invalidateQueries({ queryKey: ['sales'] });
-      await queryClient.refetchQueries({ queryKey: ['products', storeId] });
+      await queryClient.refetchQueries({
+        queryKey: ['products', storeId],
+      });
     } finally {
       setIsRefreshing(false);
     }
@@ -236,7 +248,9 @@ export default function DashboardScreen() {
           />
         }
       >
-        <View className={isWide ? 'flex-row items-start gap-4' : 'gap-4'}>
+        <View
+          className={isWide ? 'flex-row items-start gap-4' : 'gap-4'}
+        >
           <View className={isWide ? 'flex-[3] gap-4' : 'gap-4'}>
             <StartCard
               onPress={() => router.push(ROUTES.cashier)}
@@ -274,15 +288,11 @@ export default function DashboardScreen() {
       </ScrollView>
 
       <DashboardHeader
-        initial={initial}
-        greeting={getGreeting()}
-        name={cashierName}
-        avatarUrl={user?.avatar_url ?? null}  // ⭐ NEW
+        user={user}
         time={timeLabel}
         fullDate={dateFullLabel}
         expanded={isWide}
-        isRefreshing={isRefreshing}
-        onRefresh={refreshAll}
+        onSettings={() => router.push(ROUTES.settings)}
         onLogout={() => setLogoutConfirmOpen(true)}
       />
 
@@ -301,7 +311,10 @@ export default function DashboardScreen() {
         ) : (
           <View className="w-full max-w-[320px] items-center gap-3 rounded-2xl bg-white p-6 dark:bg-stone-900">
             <View className="size-12 items-center justify-center rounded-full bg-destructive/10 dark:bg-red-500/15">
-              <AlertTriangle size={22} className="text-destructive dark:text-red-400" />
+              <AlertTriangle
+                size={22}
+                className="text-destructive dark:text-red-400"
+              />
             </View>
             <Text className="text-center font-dm-bold text-sm text-foreground dark:text-stone-50">
               Gagal memuat transaksi
@@ -336,7 +349,10 @@ export default function DashboardScreen() {
       <ReceiptModal
         sale={saleDetail ?? null}
         visible={
-          !!selectedSaleId && !!saleDetail && !isLoadingDetail && !isDetailError
+          !!selectedSaleId &&
+          !!saleDetail &&
+          !isLoadingDetail &&
+          !isDetailError
         }
         onClose={closeDetail}
         onEdit={handleEdit}

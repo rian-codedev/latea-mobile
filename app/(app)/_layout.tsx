@@ -12,6 +12,7 @@ export default function AppLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="cashier" />
+      <Stack.Screen name="settings" />
     </Stack>
   );
 }

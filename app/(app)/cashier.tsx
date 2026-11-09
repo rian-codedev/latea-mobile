@@ -1,16 +1,35 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
-import { View, TextInput, FlatList, Modal, Pressable } from 'react-native';
+import {
+  View,
+  TextInput,
+  FlatList,
+  Modal,
+  Pressable,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Search, X } from 'lucide-react-native';
+import {
+  activateKeepAwakeAsync,
+  deactivateKeepAwake,
+} from 'expo-keep-awake';
+
 import { Icon } from '@/components/ui/icon';
 import { useResponsive, getGridColumns } from '@/lib/hooks/use-responsive';
 import { useProducts } from '@/lib/hooks/use-products';
-import { fetchSaleDetail, type Sale } from '@/lib/api/sales';
+import {
+  fetchSaleDetail,
+  createSale,
+  type Sale,
+} from '@/lib/api/sales';
 import type { ApiProduct } from '@/lib/api/product';
+import { getErrorMessage } from '@/lib/api/client';
 import { useCart, calcTotals, type CartItem } from '@/lib/stores/cart';
 import { useSession } from '@/lib/stores/session';
+import { usePreferences } from '@/lib/stores/preferences';
 import { ROUTES } from '@/lib/constants/app';
+
 import { Screen } from '@/components/layout/screen';
 import { LoadingOverlay } from '@/components/feedback/loading-overlay';
 import { SuccessToast } from '@/components/feedback/success-toast';
@@ -20,8 +39,11 @@ import { ProductCard } from '@/components/features/cashier/product-card';
 import { CartPanel } from '@/components/features/cashier/cart-panel';
 import { CheckoutModal } from '@/components/features/cashier/checkout-modal';
 import { FloatingCartBar } from '@/components/features/cashier/floating-cart-bar';
-import { HEADER_HEIGHT, CART_BAR_HEIGHT, PRODUCT_CARD_HEIGHT } from '@/lib/theme/sizing';
-import { useKeepAwake } from 'expo-keep-awake';
+import {
+  HEADER_HEIGHT,
+  CART_BAR_HEIGHT,
+  PRODUCT_CARD_HEIGHT,
+} from '@/lib/theme/sizing';
 
 type Spacer = { id: string; spacer: true };
 type GridItem = ApiProduct | Spacer;
@@ -30,25 +52,48 @@ function isSpacer(item: GridItem): item is Spacer {
   return 'spacer' in item && item.spacer === true;
 }
 
+type ToastState = { msg: string; variant: 'success' | 'error' } | null;
+
 export default function CashierScreen() {
-  useKeepAwake();
   const insets = useSafeAreaInsets();
   const { device, isTablet } = useResponsive();
   const cols = getGridColumns(device, 'catalog');
+  const queryClient = useQueryClient();
+
+  /* ── Preferences ── */
+  const checkoutModalEnabled = usePreferences((s) => s.checkoutModalEnabled);
+  const keepAwakeEnabled = usePreferences((s) => s.keepAwakeEnabled);
 
   const [search, setSearch] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState>(null);
   const [isLoadingEdit, setIsLoadingEdit] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [editSale, setEditSale] = useState<Sale | null>(null);
 
   const { user } = useSession();
-  const { data: apiProducts = [], isLoading, error, refetch } = useProducts(user?.store_id);
+  const {
+    data: apiProducts = [],
+    isLoading,
+    error,
+    refetch,
+  } = useProducts(user?.store_id);
 
   const params = useLocalSearchParams<{ editSaleId?: string }>();
-  const editSaleId = params.editSaleId ? Number(params.editSaleId) : null;
+  const editSaleId = params.editSaleId
+    ? Number(params.editSaleId)
+    : null;
   const isEditMode = !!editSaleId;
+
+  /* ── Keep Awake toggle ── */
+  useEffect(() => {
+    if (!keepAwakeEnabled) return;
+    activateKeepAwakeAsync('cashier').catch(() => {});
+    return () => {
+      deactivateKeepAwake('cashier').catch(() => {});
+    };
+  }, [keepAwakeEnabled]);
 
   const setCart = useCart((s) => s.setItems);
   const clearCart = useCart((s) => s.clear);
@@ -74,13 +119,15 @@ export default function CashierScreen() {
     };
   }, [editSaleId]);
 
-  /* ── Edit mode: enrich cart setelah products siap ── */
+  /* ── Edit mode: enrich cart ── */
   useEffect(() => {
     if (!editSale || apiProducts.length === 0) return;
     clearCart();
     const cartItems: CartItem[] = editSale.items.map((it) => {
       const productId = Number(it.product_id);
-      const product = apiProducts.find((p) => Number(p.id) === productId);
+      const product = apiProducts.find(
+        (p) => Number(p.id) === productId,
+      );
       return {
         productId,
         name: it.product_name,
@@ -88,7 +135,8 @@ export default function CashierScreen() {
         emoji: product?.emoji ?? '📦',
         imageUrl: product?.image_url ?? null,
         price: it.price,
-        discountPrice: it.discount_price ?? product?.discount_price ?? null,
+        discountPrice:
+          it.discount_price ?? product?.discount_price ?? null,
         minimalDiscount: product?.minimal_discount ?? null,
         quantity: it.quantity,
       };
@@ -96,10 +144,16 @@ export default function CashierScreen() {
     setCart(cartItems);
   }, [editSale, apiProducts, setCart, clearCart]);
 
-  const showSuccess = useCallback((msg: string) => {
-    setSuccessToast(msg);
-    setTimeout(() => setSuccessToast(null), 3000);
-  }, []);
+  const showToast = useCallback(
+    (msg: string, variant: 'success' | 'error' = 'success') => {
+      setToast({ msg, variant });
+      setTimeout(
+        () => setToast(null),
+        variant === 'error' ? 5000 : 3000,
+      );
+    },
+    [],
+  );
 
   const qtyMap = useMemo(() => {
     const m = new Map<number, number>();
@@ -111,7 +165,11 @@ export default function CashierScreen() {
     const q = search.trim().toLowerCase();
     return apiProducts.filter((p) => {
       if (!p.is_active) return false;
-      if (q && !`${p.name} ${p.code}`.toLowerCase().includes(q)) return false;
+      if (
+        q &&
+        !`${p.name} ${p.code}`.toLowerCase().includes(q)
+      )
+        return false;
       return true;
     });
   }, [apiProducts, search]);
@@ -119,33 +177,90 @@ export default function CashierScreen() {
   const gridData = useMemo<GridItem[]>(() => {
     const rem = filtered.length % cols;
     if (rem === 0) return filtered;
-    const spacers: Spacer[] = Array.from({ length: cols - rem }, (_, i) => ({
-      id: `spacer-${i}`,
-      spacer: true as const,
-    }));
+    const spacers: Spacer[] = Array.from(
+      { length: cols - rem },
+      (_, i) => ({
+        id: `spacer-${i}`,
+        spacer: true as const,
+      }),
+    );
     return [...filtered, ...spacers];
   }, [filtered, cols]);
 
   const handleSubmitSuccess = useCallback(
     (sale: Sale) => {
       setCheckoutOpen(false);
-      showSuccess(
+      showToast(
         isEditMode
           ? `Transaksi ${sale.invoice_number} berhasil diperbarui`
           : `Transaksi ${sale.invoice_number} berhasil`,
+        'success',
       );
-      if (isEditMode) setTimeout(() => router.replace(ROUTES.home), 1200);
+      if (isEditMode)
+        setTimeout(() => router.replace(ROUTES.home), 1200);
     },
-    [isEditMode, showSuccess],
+    [isEditMode, showToast],
   );
 
-  const openCheckout = () => {
-    setCartOpen(false);
-    setCheckoutOpen(true);
-  };
+  /* ── Quick pay: langsung submit tanpa modal ── */
+  const quickPay = useCallback(async () => {
+    if (items.length === 0 || isProcessing) return;
+    setIsProcessing(true);
+    try {
+      const sale = await createSale({
+        items: items.map((i) => ({
+          product_id: i.productId,
+          quantity: i.quantity,
+        })),
+        payment_amount: total,
+      });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      clearCart();
+      setCartOpen(false);
+      showToast(
+        `Transaksi ${sale.invoice_number} berhasil`,
+        'success',
+      );
+    } catch (e) {
+      showToast(getErrorMessage(e), 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [
+    items,
+    total,
+    isProcessing,
+    queryClient,
+    clearCart,
+    showToast,
+  ]);
+
+  const handlePay = useCallback(() => {
+    if (items.length === 0 || isProcessing) return;
+
+    // Edit mode atau modal aktif → buka modal
+    if (checkoutModalEnabled || isEditMode) {
+      setCartOpen(false);
+      setCheckoutOpen(true);
+      return;
+    }
+
+    // Mode cepat → langsung submit
+    void quickPay();
+  }, [
+    items.length,
+    isProcessing,
+    checkoutModalEnabled,
+    isEditMode,
+    quickPay,
+  ]);
 
   const handleBack = () =>
-    router.canGoBack() ? router.back() : router.replace(ROUTES.home);
+    router.canGoBack()
+      ? router.back()
+      : router.replace(ROUTES.home);
+
+  const isQuickPayMode = !checkoutModalEnabled && !isEditMode;
 
   return (
     <Screen>
@@ -263,12 +378,21 @@ export default function CashierScreen() {
         {/* ═══ Cart (tablet) ═══ */}
         {isTablet ? (
           <View className="flex-[3] bg-white dark:bg-stone-950">
-            <CartPanel bottomInset={insets.bottom} onCheckout={openCheckout} />
+            <CartPanel
+              bottomInset={insets.bottom}
+              onCheckout={handlePay}
+              isProcessing={isProcessing}
+              isQuickPay={isQuickPayMode}
+            />
           </View>
         ) : null}
       </View>
 
-      <CashierHeader isEditMode={isEditMode} onBack={handleBack} />
+      <CashierHeader
+        isEditMode={isEditMode}
+        isQuickPay={isQuickPayMode}
+        onBack={handleBack}
+      />
 
       {!isTablet ? (
         <FloatingCartBar
@@ -293,7 +417,9 @@ export default function CashierScreen() {
               <CartPanel
                 bottomInset={insets.bottom}
                 onClose={() => setCartOpen(false)}
-                onCheckout={openCheckout}
+                onCheckout={handlePay}
+                isProcessing={isProcessing}
+                isQuickPay={isQuickPayMode}
               />
             </View>
           </View>
@@ -309,8 +435,14 @@ export default function CashierScreen() {
         isEditMode={isEditMode}
       />
 
-      <LoadingOverlay visible={isLoadingEdit} message="Memuat data transaksi..." />
-      <SuccessToast message={successToast} />
+      <LoadingOverlay
+        visible={isLoadingEdit}
+        message="Memuat data transaksi..."
+      />
+      <SuccessToast
+        message={toast?.msg ?? null}
+        variant={toast?.variant}
+      />
     </Screen>
   );
 }

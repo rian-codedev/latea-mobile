@@ -7,11 +7,15 @@ import { NetworkStatus } from '@/components/common/network-status';
 
 export function CashierHeader({
   isEditMode,
+  isQuickPay = false,
   onBack,
 }: {
   isEditMode: boolean;
+  isQuickPay?: boolean;
   onBack: () => void;
 }) {
+  const showQuickBadge = isQuickPay && !isEditMode;
+
   return (
     <GlassHeader>
       <IconButton
@@ -20,9 +24,19 @@ export function CashierHeader({
         accessibilityLabel="Kembali"
       />
       <View className="flex-1">
-        <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
-          {isEditMode ? 'Edit Transaksi' : 'Kasir'}
-        </Text>
+        <View className="flex-row items-center gap-2">
+          <Text className="font-dm-bold text-base text-foreground dark:text-stone-50">
+            {isEditMode ? 'Edit Transaksi' : 'Kasir'}
+          </Text>
+          {showQuickBadge ? (
+            <View className="flex-row items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 dark:bg-sage-500/15">
+              <View className="size-1.5 rounded-full bg-primary dark:bg-sage-400" />
+              <Text className="font-dm-bold text-[9px] text-primary dark:text-sage-400">
+                Cepat
+              </Text>
+            </View>
+          ) : null}
+        </View>
         <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
           {isEditMode
             ? 'Ubah item atau jumlah, lalu simpan'

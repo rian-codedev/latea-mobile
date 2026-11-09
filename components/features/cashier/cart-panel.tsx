@@ -14,10 +14,14 @@ export function CartPanel({
   bottomInset = 0,
   onClose,
   onCheckout,
+  isProcessing = false,
+  isQuickPay = false,
 }: {
   bottomInset?: number;
   onClose?: () => void;
   onCheckout: () => void;
+  isProcessing?: boolean;
+  isQuickPay?: boolean;
 }) {
   const items = useCart((s) => s.items);
   const increment = useCart((s) => s.increment);
@@ -34,7 +38,11 @@ export function CartPanel({
     <View className="flex-1">
       <View className="flex-row items-center justify-between border-b border-border/40 px-4 py-3 dark:border-stone-800/60">
         <View className="flex-row items-center gap-2">
-          <Icon as={ShoppingCart} size={17} className="text-primary dark:text-sage-400" />
+          <Icon
+            as={ShoppingCart}
+            size={17}
+            className="text-primary dark:text-sage-400"
+          />
           <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
             Keranjang
           </Text>
@@ -43,7 +51,7 @@ export function CartPanel({
 
         <View className="flex-row items-center gap-3">
           {!isEmpty ? (
-            <Pressable onPress={clear} hitSlop={8}>
+            <Pressable onPress={clear} hitSlop={8} disabled={isProcessing}>
               <Text className="font-dm-semibold text-xs text-destructive dark:text-red-400">
                 Kosongkan
               </Text>
@@ -55,6 +63,7 @@ export function CartPanel({
               variant="filled"
               size="sm"
               onPress={onClose}
+              disabled={isProcessing}
               accessibilityLabel="Tutup keranjang"
             />
           ) : null}
@@ -81,7 +90,7 @@ export function CartPanel({
                 item={item}
                 onInc={() => increment(item.productId)}
                 onDec={() => decrement(item.productId)}
-                onChangeQty={(qty) => setQuantity(item.productId, qty)} // ⭐ NEW
+                onChangeQty={(qty) => setQuantity(item.productId, qty)}
                 onRemove={() => removeItem(item.productId)}
               />
             )}
@@ -137,12 +146,17 @@ export function CartPanel({
 
         <Button
           label="Bayar"
-          onPress={() => {
-            onCheckout();
-          }}
+          onPress={onCheckout}
+          loading={isProcessing}
           disabled={isEmpty}
           fullWidth
         />
+
+        {isQuickPay && !isEmpty ? (
+          <Text className="mt-1.5 text-center font-dm-regular text-[10px] text-muted-foreground dark:text-stone-400">
+            Uang dianggap pas
+          </Text>
+        ) : null}
       </View>
     </View>
   );

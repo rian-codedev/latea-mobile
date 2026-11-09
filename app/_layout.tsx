@@ -20,7 +20,9 @@ import {
 
 import { NAV_THEME } from '@/lib/theme/navigation';
 import { SessionProvider, useSession } from '@/lib/stores/session';
+import { usePreferences } from '@/lib/stores/preferences';
 import { useFirstLaunch } from '@/lib/hooks/use-first-launch';
+import { useThemeSync } from '@/lib/hooks/use-theme-sync';
 import { LoadingSplash } from '@/components/feedback/loading-splash';
 import { AuthExpiredToast } from '@/components/feedback/auth-expired-toast';
 
@@ -48,6 +50,8 @@ function RootNavigator() {
   const isDark = colorScheme === 'dark';
   const { authExpired, clearAuthExpired } = useSession();
 
+  useThemeSync(); // ⭐ Terapkan tema dari preferensi
+
   const [fontsLoaded] = useFonts({
     DMSans_400Regular,
     DMSans_500Medium,
@@ -57,6 +61,7 @@ function RootNavigator() {
   });
 
   const { isFirstLaunch } = useFirstLaunch();
+  const prefsHydrated = usePreferences((s) => s._hasHydrated);
   const [appReady, setAppReady] = useState(false);
 
   useEffect(() => {
@@ -73,7 +78,8 @@ function RootNavigator() {
     }
   }, [appReady, isFirstLaunch]);
 
-  if (!fontsLoaded || isFirstLaunch === null || !appReady) {
+  // ⭐ Gate: tunggu semua siap termasuk preferensi ter-hydrate
+  if (!fontsLoaded || isFirstLaunch === null || !appReady || !prefsHydrated) {
     return <LoadingSplash />;
   }
 
@@ -89,7 +95,6 @@ function RootNavigator() {
         <PortalHost />
       </ThemeProvider>
 
-      {/* ⭐ Toast global — di luar Stack agar tampil di atas semua screen */}
       <AuthExpiredToast
         visible={authExpired}
         onHide={clearAuthExpired}

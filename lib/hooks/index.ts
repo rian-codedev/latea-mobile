@@ -4,3 +4,4 @@ export { useLoop } from './use-loop';
 export { useProducts } from './use-products';
 export { useFirstLaunch } from './use-first-launch';
 export { useResponsive, getGridColumns } from './use-responsive';
+export { useThemeSync } from './use-theme-sync';

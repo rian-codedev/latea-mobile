@@ -2,7 +2,7 @@
   "expo": {
     "name": "Latea App",
     "slug": "latea-pos-mobile",
-    "version": "7.3.2",
+    "version": "8.1.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "latea-pos-mobile",
