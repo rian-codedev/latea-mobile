@@ -7,8 +7,10 @@ import {
   Store as StoreIcon,
   ChevronDown,
   ChevronUp,
+  Package,
 } from 'lucide-react-native';
 import { ProductImage } from '@/components/common/product-image';
+import { EmptyState } from '@/components/feedback/empty-state'; 
 import { formatRupiah } from '@/lib/utils/format';
 import type { ApiProduct } from '@/lib/api/product';
 
@@ -67,15 +69,11 @@ export function ProductListCard({ products }: { products: ApiProduct[] }) {
       </Pressable>
 
       {isEmpty ? (
-        <View className="items-center gap-1 px-4 py-10">
-          <Text className="text-3xl">📦</Text>
-          <Text className="font-dm-semibold text-sm text-foreground dark:text-stone-50">
-            Belum ada produk
-          </Text>
-          <Text className="text-center font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-            Admin belum meng-assign produk ke toko Anda
-          </Text>
-        </View>
+        <EmptyState
+          icon={Package}
+          title="Belum ada produk"
+          description="Admin belum meng-assign produk ke toko Anda"
+        />
       ) : (
         <View>
           {displayed.map((p, i) => {
@@ -94,11 +92,7 @@ export function ProductListCard({ products }: { products: ApiProduct[] }) {
                     : ''
                 }`}
               >
-                <ProductImage
-                  uri={p.image_url}
-                  emoji={p.emoji}
-                  size={44}
-                />
+                <ProductImage uri={p.image_url} size={44} />
                 <View className="flex-1">
                   <Text
                     className="font-dm-semibold text-[12px] leading-tight text-foreground dark:text-stone-50"

@@ -2,7 +2,8 @@ import { View, ScrollView, Pressable } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import { CountBadge } from '@/components/ui/badge';
-import { Clock, ChevronRight } from 'lucide-react-native';
+import { Clock, ChevronRight, Receipt } from 'lucide-react-native';
+import { EmptyState } from '@/components/feedback/empty-state';
 import { formatRupiah } from '@/lib/utils/format';
 import {
   RECENT_MAX_HEIGHT,
@@ -51,15 +52,11 @@ export function RecentCard({
       </View>
 
       {isEmpty ? (
-        <View className="items-center gap-1 px-4 py-10">
-          <Text className="text-3xl">🧾</Text>
-          <Text className="font-dm-semibold text-sm text-foreground dark:text-stone-50">
-            Belum ada transaksi
-          </Text>
-          <Text className="text-center font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
-            Transaksi hari ini akan muncul di sini
-          </Text>
-        </View>
+        <EmptyState
+          icon={Receipt}
+          title="Belum ada transaksi"
+          description="Transaksi hari ini akan muncul di sini"
+        />
       ) : (
         <ScrollView
           style={{ maxHeight: RECENT_MAX_HEIGHT }}

@@ -11,7 +11,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColorScheme } from 'nativewind';
-import { Search, X } from 'lucide-react-native';
+import {
+  Search,
+  X,
+  SearchX,
+  AlertTriangle,
+} from 'lucide-react-native';
 import {
   activateKeepAwakeAsync,
   deactivateKeepAwake,
@@ -383,7 +388,8 @@ export default function CashierScreen() {
                   </View>
                 ) : error ? (
                   <EmptyState
-                    emoji="⚠️"
+                    icon={AlertTriangle}
+                    tone="warning"
                     title="Gagal memuat produk"
                     description="Periksa koneksi internet Anda"
                     actionLabel="Coba Lagi"
@@ -391,7 +397,7 @@ export default function CashierScreen() {
                   />
                 ) : (
                   <EmptyState
-                    emoji="🔍"
+                    icon={SearchX}
                     title="Produk tidak ditemukan"
                     description="Coba kata kunci atau kode produk lain"
                   />

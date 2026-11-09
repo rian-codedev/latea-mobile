@@ -1,11 +1,12 @@
 import { useCallback } from 'react';
-import { Pressable, View, Text as RNText, Image } from 'react-native';
+import { Pressable, View, Image } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-
+import { Package } from 'lucide-react-native';
+import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { formatRupiah } from '@/lib/utils/format';
@@ -68,9 +69,11 @@ export function ProductCard({
             resizeMode="cover"
           />
         ) : (
-          <RNText className="text-[46px] leading-none">
-            {product.emoji ?? '📦'}
-          </RNText>
+          <Icon
+            as={Package}
+            size={42}
+            className="text-muted-foreground/40 dark:text-stone-500"
+          />
         )}
 
         <View className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-0.5 dark:bg-stone-900/95">

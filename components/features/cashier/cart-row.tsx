@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable, Image, TextInput, Text as RNText } from 'react-native';
+import { View, Pressable, TextInput } from 'react-native';
+import { ProductImage } from '@/components/common/product-image';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { Icon } from '@/components/ui/icon';
@@ -56,17 +57,7 @@ export function CartRow({
 
   return (
     <View className="flex-row gap-2.5 border-b border-border/30 py-3 dark:border-stone-800/40">
-      <View className="size-11 items-center justify-center overflow-hidden rounded-xl bg-accent/60 dark:bg-stone-800">
-        {item.imageUrl ? (
-          <Image
-            source={{ uri: item.imageUrl }}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
-          />
-        ) : (
-          <RNText className="text-xl">{item.emoji}</RNText>
-        )}
-      </View>
+      <ProductImage uri={item.imageUrl} size={44} rounded="xl" />
 
       <View className="flex-1 gap-2">
         <View>

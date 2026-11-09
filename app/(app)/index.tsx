@@ -14,7 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Wallet,
   ArrowLeftRight,
-  ShoppingBag,
+  PackageMinus,
   AlertTriangle,
   Trash2,
   LogOut,
@@ -287,7 +287,7 @@ export default function DashboardScreen() {
                   tone="amber"
                 />
                 <StatCard
-                  icon={ShoppingBag}
+                  icon={PackageMinus}
                   label="Item Terjual"
                   value={String(todayStats.itemsSold)}
                   tone="blue"

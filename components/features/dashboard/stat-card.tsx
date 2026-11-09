@@ -70,7 +70,7 @@ export function StatCard({
         <View
           className={`size-10 items-center justify-center rounded-xl ${t.iconBg}`}
         >
-          <Icon as={icon} size={18} className={t.iconColor} />
+          <Icon as={icon} size={20} className={t.iconColor} />
         </View>
         <View>
           <Text className="font-dm-medium text-[10.5px] uppercase tracking-wider text-muted-foreground dark:text-stone-400">

@@ -2,7 +2,12 @@ import { useMemo, useState, useCallback } from 'react';
 import { View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
-import { TrendingUp, ChevronDown, ChevronUp } from 'lucide-react-native';
+import {
+  TrendingUp,
+  ChevronDown,
+  ChevronUp,
+  BarChart3,
+} from 'lucide-react-native';
 import type { ProductSummaryItem } from '@/lib/api/sales';
 import { EmptyState } from '@/components/feedback/empty-state';
 
@@ -74,7 +79,7 @@ export function ProductSalesCard({
 
       {isEmpty ? (
         <EmptyState
-          emoji="📊"
+          icon={BarChart3}
           title="Belum ada produk terjual hari ini"
         />
       ) : (

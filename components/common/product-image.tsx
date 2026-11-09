@@ -1,25 +1,31 @@
 import { useState } from 'react';
 import { View, Image } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { Package } from 'lucide-react-native';
+import { Icon } from '@/components/ui/icon';
+
+const RADIUS: Record<'lg' | 'xl' | '2xl', string> = {
+  lg: 'rounded-lg',
+  xl: 'rounded-xl',
+  '2xl': 'rounded-2xl',
+};
 
 export function ProductImage({
   uri,
-  emoji,
   size = 48,
   rounded = 'xl',
 }: {
   uri: string | null;
-  emoji: string | null;
   size?: number;
   rounded?: 'lg' | 'xl' | '2xl';
 }) {
   const [failed, setFailed] = useState(false);
-  const showImage = uri && !failed;
+  const showImage = !!uri && !failed;
+  const iconSize = Math.round(size * 0.45);
 
   return (
     <View
       style={{ width: size, height: size }}
-      className={`items-center justify-center overflow-hidden rounded-${rounded} border border-border/40 bg-accent/60 dark:border-stone-800/60 dark:bg-stone-800`}
+      className={`items-center justify-center overflow-hidden ${RADIUS[rounded]} border border-border/40 bg-accent/60 dark:border-stone-800/60 dark:bg-stone-800`}
     >
       {showImage ? (
         <Image
@@ -29,7 +35,11 @@ export function ProductImage({
           onError={() => setFailed(true)}
         />
       ) : (
-        <Text style={{ fontSize: size * 0.5 }}>{emoji ?? '📦'}</Text>
+        <Icon
+          as={Package}
+          size={iconSize}
+          className="text-muted-foreground/50 dark:text-stone-500"
+        />
       )}
     </View>
   );

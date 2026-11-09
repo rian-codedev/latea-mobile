@@ -74,7 +74,7 @@ export function CartPanel({
         {isEmpty ? (
           <View className="flex-1">
             <EmptyState
-              emoji="🛒"
+              icon={ShoppingCart}
               title="Keranjang kosong"
               description="Tap produk di katalog untuk menambahkannya"
             />

@@ -8,9 +8,8 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Image,
-  Text as RNText,
 } from 'react-native';
+import { ProductImage } from '@/components/common/product-image';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
@@ -160,17 +159,7 @@ export function CheckoutModal({
                         key={item.productId}
                         className="flex-row items-center gap-3 border-b border-border/30 py-2.5 last:border-b-0 dark:border-stone-800/40"
                       >
-                        <View className="size-8 items-center justify-center overflow-hidden rounded-lg bg-accent/60 dark:bg-stone-800">
-                          {item.imageUrl ? (
-                            <Image
-                              source={{ uri: item.imageUrl }}
-                              style={{ width: '100%', height: '100%' }}
-                              resizeMode="cover"
-                            />
-                          ) : (
-                            <RNText className="text-sm">{item.emoji}</RNText>
-                          )}
-                        </View>
+                        <ProductImage uri={item.imageUrl} size={32} rounded="lg" />
                         <View className="flex-1">
                           <Text
                             className="font-dm-semibold text-[12px] text-foreground dark:text-stone-50"
