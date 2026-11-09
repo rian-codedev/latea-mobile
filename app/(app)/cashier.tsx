@@ -5,16 +5,19 @@ import {
   FlatList,
   Modal,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { useColorScheme } from 'nativewind';
 import { Search, X } from 'lucide-react-native';
 import {
   activateKeepAwakeAsync,
   deactivateKeepAwake,
 } from 'expo-keep-awake';
 
+import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import { useResponsive, getGridColumns } from '@/lib/hooks/use-responsive';
 import { useProducts } from '@/lib/hooks/use-products';
@@ -54,11 +57,16 @@ function isSpacer(item: GridItem): item is Spacer {
 
 type ToastState = { msg: string; variant: 'success' | 'error' } | null;
 
+const GRID_PADDING = 14;
+const GRID_GAP = 12;
+
 export default function CashierScreen() {
   const insets = useSafeAreaInsets();
   const { device, isTablet } = useResponsive();
   const cols = getGridColumns(device, 'catalog');
   const queryClient = useQueryClient();
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   /* ── Preferences ── */
   const checkoutModalEnabled = usePreferences((s) => s.checkoutModalEnabled);
@@ -238,14 +246,12 @@ export default function CashierScreen() {
   const handlePay = useCallback(() => {
     if (items.length === 0 || isProcessing) return;
 
-    // Edit mode atau modal aktif → buka modal
     if (checkoutModalEnabled || isEditMode) {
       setCartOpen(false);
       setCheckoutOpen(true);
       return;
     }
 
-    // Mode cepat → langsung submit
     void quickPay();
   }, [
     items.length,
@@ -261,6 +267,7 @@ export default function CashierScreen() {
       : router.replace(ROUTES.home);
 
   const isQuickPayMode = !checkoutModalEnabled && !isEditMode;
+  const isSearching = search.trim().length > 0;
 
   return (
     <Screen>
@@ -276,9 +283,9 @@ export default function CashierScreen() {
               : 'flex-1'
           }
         >
-          {/* Search */}
-          <View className="bg-white px-3 pb-2 pt-3 dark:bg-stone-950">
-            <View className="h-11 flex-row items-center gap-2 rounded-full border border-border/50 bg-muted/40 px-4 dark:border-stone-700/60 dark:bg-stone-800/40">
+          {/* ─── Search Section ─── */}
+          <View className="border-b border-border/30 bg-white px-4 pb-3 pt-3 dark:border-stone-800/60 dark:bg-stone-950">
+            <View className="h-11 flex-row items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-4 dark:border-stone-700/60 dark:bg-stone-800/40">
               <Icon
                 as={Search}
                 size={16}
@@ -290,6 +297,7 @@ export default function CashierScreen() {
                 placeholder="Cari nama atau kode produk"
                 placeholderTextColor="#9CA3AF"
                 className="flex-1 py-0 font-dm-regular text-sm text-foreground dark:text-stone-50"
+                style={{ textAlignVertical: 'center' }}
                 autoCorrect={false}
                 autoCapitalize="none"
                 returnKeyType="search"
@@ -308,76 +316,94 @@ export default function CashierScreen() {
                 </Pressable>
               ) : null}
             </View>
+
+            {/* Search result count */}
+            {isSearching && !isLoading && !error ? (
+              <Text className="mt-2 px-1 font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
+                {filtered.length} produk ditemukan
+              </Text>
+            ) : null}
           </View>
 
-          {/* Grid */}
-          <FlatList
-            key={`cols-${cols}`}
-            data={gridData}
-            keyExtractor={(p) => String(p.id)}
-            numColumns={cols}
-            columnWrapperStyle={{ gap: 10 }}
-            contentContainerStyle={{
-              padding: 12,
-              gap: 10,
-              paddingBottom: isTablet
-                ? 24
-                : CART_BAR_HEIGHT + insets.bottom + 32,
-            }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => {
-              if (isSpacer(item)) {
+          {/* ─── Grid Section ─── */}
+          <View className="flex-1 bg-muted/20 dark:bg-stone-900/40">
+            <FlatList
+              key={`cols-${cols}`}
+              data={gridData}
+              keyExtractor={(p) => String(p.id)}
+              numColumns={cols}
+              columnWrapperStyle={{ gap: GRID_GAP }}
+              contentContainerStyle={{
+                padding: GRID_PADDING,
+                gap: GRID_GAP,
+                paddingBottom: isTablet
+                  ? 24
+                  : CART_BAR_HEIGHT + insets.bottom + 40,
+              }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => {
+                if (isSpacer(item)) {
+                  return (
+                    <View
+                      className="flex-1"
+                      style={{ height: PRODUCT_CARD_HEIGHT }}
+                    />
+                  );
+                }
                 return (
-                  <View
-                    className="flex-1"
-                    style={{ height: PRODUCT_CARD_HEIGHT }}
+                  <ProductCard
+                    product={item}
+                    qty={qtyMap.get(item.id) ?? 0}
+                    onPress={() =>
+                      addItem({
+                        productId: item.id,
+                        name: item.name,
+                        code: item.code,
+                        emoji: item.emoji ?? '📦',
+                        imageUrl: item.image_url,
+                        price: item.price,
+                        discountPrice: item.discount_price,
+                        minimalDiscount: item.minimal_discount,
+                      })
+                    }
                   />
                 );
+              }}
+              ListEmptyComponent={
+                isLoading ? (
+                  <View className="items-center justify-center gap-3 py-20">
+                    <ActivityIndicator
+                      size="large"
+                      color={isDark ? '#A3C9A8' : '#84A98C'}
+                    />
+                    <Text className="font-dm-regular text-xs text-muted-foreground dark:text-stone-400">
+                      Memuat produk...
+                    </Text>
+                  </View>
+                ) : error ? (
+                  <EmptyState
+                    emoji="⚠️"
+                    title="Gagal memuat produk"
+                    description="Periksa koneksi internet Anda"
+                    actionLabel="Coba Lagi"
+                    onAction={() => refetch()}
+                  />
+                ) : (
+                  <EmptyState
+                    emoji="🔍"
+                    title="Produk tidak ditemukan"
+                    description="Coba kata kunci atau kode produk lain"
+                  />
+                )
               }
-              return (
-                <ProductCard
-                  product={item}
-                  qty={qtyMap.get(item.id) ?? 0}
-                  onPress={() =>
-                    addItem({
-                      productId: item.id,
-                      name: item.name,
-                      code: item.code,
-                      emoji: item.emoji ?? '📦',
-                      imageUrl: item.image_url,
-                      price: item.price,
-                      discountPrice: item.discount_price,
-                      minimalDiscount: item.minimal_discount,
-                    })
-                  }
-                />
-              );
-            }}
-            ListEmptyComponent={
-              isLoading ? (
-                <EmptyState emoji="⏳" title="Memuat produk..." />
-              ) : error ? (
-                <EmptyState
-                  emoji="⚠️"
-                  title="Gagal memuat produk"
-                  actionLabel="Coba Lagi"
-                  onAction={() => refetch()}
-                />
-              ) : (
-                <EmptyState
-                  emoji="🔍"
-                  title="Produk tidak ditemukan"
-                  description="Coba kata kunci atau kode produk lain"
-                />
-              )
-            }
-          />
+            />
+          </View>
         </View>
 
         {/* ═══ Cart (tablet) ═══ */}
         {isTablet ? (
-          <View className="flex-[3] bg-white dark:bg-stone-950">
+          <View className="flex-[3] border-l border-border/30 bg-white dark:border-stone-800/60 dark:bg-stone-950">
             <CartPanel
               bottomInset={insets.bottom}
               onCheckout={handlePay}
