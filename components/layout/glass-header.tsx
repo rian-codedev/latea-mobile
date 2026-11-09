@@ -14,7 +14,7 @@ export function GlassHeader({ children }: { children: ReactNode }) {
     <BlurView
       intensity={70}
       tint={isDark ? 'dark' : 'light'}
-      style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: insets.top }}
+      style={{ position: 'absolute', top: 0, left: 3, right: 3, paddingTop: insets.top }}
       className="overflow-hidden"
     >
       <View className="absolute bottom-0 left-0 right-0 h-px bg-border/40 dark:bg-stone-800/60" />
