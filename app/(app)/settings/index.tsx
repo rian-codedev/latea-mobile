@@ -37,6 +37,7 @@ import {
 } from '@/lib/stores/preferences';
 import { ROUTES } from '@/lib/constants/app';
 import { HEADER_HEIGHT } from '@/lib/theme/sizing';
+import { UserAvatar } from '@/components/common/user-avatar';
 
 const THEMES: {
   value: ThemePreference;
@@ -115,19 +116,11 @@ export default function SettingsScreen() {
           className="overflow-hidden rounded-2xl border border-border/40 bg-white active:bg-muted/40 dark:border-stone-800/60 dark:bg-stone-900 dark:active:bg-stone-800/40"
         >
           <View className="flex-row items-center gap-3 p-4">
-            {user?.avatar_url ? (
-              <Image
-                source={{ uri: user.avatar_url }}
-                style={{ width: 56, height: 56, borderRadius: 28 }}
-                resizeMode="cover"
-              />
-            ) : (
-              <View className="size-14 items-center justify-center rounded-full bg-primary dark:bg-sage-500">
-                <Text className="font-dm-extrabold text-lg text-primary-foreground">
-                  {initial}
-                </Text>
-              </View>
-            )}
+            <UserAvatar
+              name={user?.name ?? 'K'}
+              uri={user?.avatar_url}
+              size={56}
+            />
             <View className="flex-1">
               <Text
                 className="font-dm-bold text-base text-foreground dark:text-stone-50"

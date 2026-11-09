@@ -6,10 +6,12 @@ import { GlassHeader } from '@/components/layout/glass-header';
 import { DateTimePill } from './date-time-pill';
 import { AvatarDropdown } from './avatar-dropdown';
 import { NetworkStatus } from '@/components/common/network-status';
+import { UserAvatar } from '@/components/common/user-avatar';
+import { useResponsive } from '@/lib/hooks/use-responsive';
 import { APP_NAME } from '@/lib/constants/app';
 import type { User } from '@/lib/stores/session';
 
-const LOGO = require('@/assets/images/icon.png');
+const LOGO = require('@/assets/images/logo.png');
 
 export function DashboardHeader({
   user,
@@ -27,8 +29,11 @@ export function DashboardHeader({
   onLogout: () => void;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const { isTablet } = useResponsive();
 
-  const initial = (user?.name ?? 'K').charAt(0).toUpperCase();
+  // Logo responsif
+  const logoSize = isTablet ? 36 : 32;
+  const logoRadius = Math.round(logoSize * 0.25);
 
   return (
     <>
@@ -36,8 +41,13 @@ export function DashboardHeader({
         {/* Kiri: logo + nama app */}
         <Image
           source={LOGO}
-          style={{ width: 24, height: 24, borderRadius: 6 }}
+          style={{
+            width: logoSize,
+            height: logoSize,
+            borderRadius: logoRadius,
+          }}
           resizeMode="cover"
+          accessibilityLabel={`Logo ${APP_NAME}`}
         />
         <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
           {APP_NAME}
@@ -56,19 +66,11 @@ export function DashboardHeader({
           hitSlop={8}
           className="active:opacity-70"
         >
-          {user?.avatar_url ? (
-            <Image
-              source={{ uri: user.avatar_url }}
-              style={{ width: 40, height: 40, borderRadius: 20 }}
-              resizeMode="cover"
-            />
-          ) : (
-            <View className="size-10 items-center justify-center rounded-full bg-primary dark:bg-sage-500">
-              <Text className="font-dm-extrabold text-sm text-primary-foreground">
-                {initial}
-              </Text>
-            </View>
-          )}
+          <UserAvatar
+            name={user?.name ?? 'K'}
+            uri={user?.avatar_url}
+            size={40}
+          />
         </Pressable>
       </GlassHeader>
 

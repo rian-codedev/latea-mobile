@@ -1,16 +1,11 @@
 import { useState } from 'react';
-import {
-  View,
-  Image,
-  Pressable,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Pressable, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Camera } from 'lucide-react-native';
 
-import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
+import { UserAvatar } from '@/components/common/user-avatar';
 import type { PickedAvatar } from '@/lib/api/account';
 
 export function AvatarPicker({
@@ -26,24 +21,20 @@ export function AvatarPicker({
 }) {
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
-  const [failed, setFailed] = useState(false);
 
-  const displayUri = localUri ?? (failed ? null : currentUri);
-  const showImage = !!displayUri;
+  const displayUri = localUri ?? currentUri;
 
   async function handlePick() {
     if (isPicking) return;
 
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      return;
-    }
+    if (!perm.granted) return;
 
     setIsPicking(true);
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],  // ✅
         allowsEditing: true,
         aspect: [1, 1],
         quality: 1,
@@ -54,7 +45,6 @@ export function AvatarPicker({
         return;
       }
 
-      // Resize 512×512 + compress quality 0.8 → ~50–150KB
       const manip = await ImageManipulator.manipulateAsync(
         result.assets[0].uri,
         [{ resize: { width: 512, height: 512 } }],
@@ -65,7 +55,6 @@ export function AvatarPicker({
       );
 
       setLocalUri(manip.uri);
-      setFailed(false);
       onPicked({
         uri: manip.uri,
         name: `avatar-${Date.now()}.jpg`,
@@ -87,26 +76,11 @@ export function AvatarPicker({
       accessibilityHint="Membuka galeri foto"
       className="relative self-center"
     >
-      {showImage ? (
-        <Image
-          source={{ uri: displayUri! }}
-          style={{ width: size, height: size, borderRadius: size / 2 }}
-          resizeMode="cover"
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        <View
-          className="items-center justify-center rounded-full bg-primary dark:bg-sage-500"
-          style={{ width: size, height: size }}
-        >
-          <Text
-            className="font-dm-extrabold text-primary-foreground"
-            style={{ fontSize: size * 0.4 }}
-          >
-            {fallbackInitial}
-          </Text>
-        </View>
-      )}
+      <UserAvatar
+        name={fallbackInitial}
+        uri={displayUri}
+        size={size}
+      />
 
       {isPicking ? (
         <View

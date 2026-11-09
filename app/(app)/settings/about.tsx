@@ -14,16 +14,21 @@ import { Icon } from '@/components/ui/icon';
 import { Screen } from '@/components/layout/screen';
 import { GlassHeader } from '@/components/layout/glass-header';
 import { IconButton } from '@/components/ui/icon-button';
-import { APP_NAME, APP_TAGLINE, APP_ORG } from '@/lib/constants/app';
-import { ROUTES } from '@/lib/constants/app';
+import { useResponsive } from '@/lib/hooks/use-responsive';
+import { APP_NAME, APP_TAGLINE, APP_ORG, ROUTES } from '@/lib/constants/app';
 import { HEADER_HEIGHT } from '@/lib/theme/sizing';
 
-const LOGO = require('@/assets/images/icon.png');
+const LOGO = require('@/assets/images/logo.png');
 
 export default function AboutScreen() {
   const insets = useSafeAreaInsets();
+  const { isTablet } = useResponsive();
   const version = Constants.expoConfig?.version ?? '1.0.0';
   const runtimeVersion = Constants.expoConfig?.runtimeVersion ?? '-';
+
+  // Logo responsif — prominent tapi tidak overwhelming
+  const logoSize = isTablet ? 128 : 96;
+  const logoRadius = Math.round(logoSize * 0.25);
 
   return (
     <Screen>
@@ -39,10 +44,15 @@ export default function AboutScreen() {
         <View className="items-center gap-2 py-6">
           <Image
             source={LOGO}
-            style={{ width: 72, height: 72, borderRadius: 18 }}
+            style={{
+              width: logoSize,
+              height: logoSize,
+              borderRadius: logoRadius,
+            }}
             resizeMode="cover"
+            accessibilityLabel={`Logo ${APP_NAME}`}
           />
-          <Text className="mt-2 font-dm-extrabold text-2xl tracking-tight text-foreground dark:text-stone-50">
+          <Text className="mt-3 font-dm-extrabold text-2xl tracking-tight text-foreground dark:text-stone-50">
             {APP_NAME}
           </Text>
           <Text className="font-dm-regular text-sm text-muted-foreground dark:text-stone-400">

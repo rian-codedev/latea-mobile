@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import {
   Animated,
   Easing,
-  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -13,6 +12,7 @@ import { LogOut, Settings, AlertTriangle } from 'lucide-react-native';
 
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
+import { UserAvatar } from '@/components/common/user-avatar';
 import { HEADER_HEIGHT } from '@/lib/theme/sizing';
 import type { User } from '@/lib/stores/session';
 
@@ -46,7 +46,6 @@ export function AvatarDropdown({
 
   if (!visible) return null;
 
-  const initial = (user?.name ?? 'K').charAt(0).toUpperCase();
   const hasStore = !!user?.store;
 
   const translateY = anim.interpolate({
@@ -76,23 +75,14 @@ export function AvatarDropdown({
             transform: [{ translateY }],
           }}
           className="overflow-hidden rounded-2xl border border-border/40 bg-white dark:border-stone-800/60 dark:bg-stone-900"
-          // eslint-disable-next-line react-native/no-inline-styles
         >
           {/* Header */}
           <View className="flex-row items-center gap-3 border-b border-border/40 px-4 py-3 dark:border-stone-800/60">
-            {user?.avatar_url ? (
-              <Image
-                source={{ uri: user.avatar_url }}
-                style={{ width: 36, height: 36, borderRadius: 18 }}
-                resizeMode="cover"
-              />
-            ) : (
-              <View className="size-9 items-center justify-center rounded-full bg-primary dark:bg-sage-500">
-                <Text className="font-dm-extrabold text-xs text-primary-foreground">
-                  {initial}
-                </Text>
-              </View>
-            )}
+            <UserAvatar
+              name={user?.name ?? 'K'}
+              uri={user?.avatar_url}
+              size={36}
+            />
             <View className="flex-1">
               <Text
                 className="font-dm-bold text-sm text-foreground dark:text-stone-50"
