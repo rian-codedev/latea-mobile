@@ -7,12 +7,15 @@ export * from './types';
 export { parseVoiceCommand } from './parser';
 export { parseIndonesianNumber } from './number-parser';
 export { matchProduct } from './matcher';
+export {
+  parseConfirmAnswer,
+  parsePickerAnswer,
+  type ConfirmAnswer,
+  type PickerAnswer,
+} from './answer-parser';
 
 /**
  * Main entry point.
- *
- * Terima raw STT text + products → VoiceParseResult.
- * Result menentukan aksi selanjutnya di UI (auto-add / confirm / picker / skip).
  */
 export function processVoiceCommand(
   rawText: string,

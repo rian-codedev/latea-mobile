@@ -46,15 +46,22 @@ import { useProducts } from '@/lib/hooks/use-products';
 import { ROUTES } from '@/lib/constants/app';
 import { HEADER_HEIGHT } from '@/lib/theme/sizing';
 
+import { VoiceFab, type VoiceFabState } from '@/components/features/cashier/voice-fab';
+import { VoiceListeningIndicator } from '@/components/features/cashier/voice-listening-indicator';
+import { VoiceConfirmModal } from '@/components/features/cashier/voice-confirm-modal';
+import { VoicePickerModal } from '@/components/features/cashier/voice-picker-modal';
+import { VoiceUndoToast, type VoiceUndoToastState } from '@/components/features/cashier/voice-undo-toast';
+import type { ApiProduct } from '@/lib/api/product';
+
 const THEMES: {
   value: ThemePreference;
   label: string;
   icon: typeof Sun;
 }[] = [
-  { value: 'system', label: 'Ikuti Sistem', icon: Smartphone },
-  { value: 'light', label: 'Terang', icon: Sun },
-  { value: 'dark', label: 'Gelap', icon: Moon },
-];
+    { value: 'system', label: 'Ikuti Sistem', icon: Smartphone },
+    { value: 'light', label: 'Terang', icon: Sun },
+    { value: 'dark', label: 'Gelap', icon: Moon },
+  ];
 
 const SESSION_TIMEOUT_OPTIONS: { value: number; label: string }[] = [
   { value: 30, label: '30 menit' },
@@ -74,6 +81,48 @@ const VOICE_IDLE_OPTIONS: { value: number; label: string }[] = [
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useSession();
+
+  /* ═══ VOICE PREVIEW STATE (Dev Only) ═══ */
+  const [previewFabState, setPreviewFabState] =
+    useState<VoiceFabState>('idle');
+  const [previewFabVisible, setPreviewFabVisible] = useState(false);
+  const [previewConfirmOpen, setPreviewConfirmOpen] = useState(false);
+  const [previewPickerOpen, setPreviewPickerOpen] = useState(false);
+  const [previewUndo, setPreviewUndo] = useState<VoiceUndoToastState>(null);
+
+  const [previewConfirmVoiceAnswer, setPreviewConfirmVoiceAnswer] =
+    useState<'yes' | 'no' | null>(null);
+  const [previewConfirmHeard, setPreviewConfirmHeard] =
+    useState<string | null>(null);
+  const [previewPickerVoiceIndex, setPreviewPickerVoiceIndex] =
+    useState<number | null>(null);
+  const [previewPickerHeard, setPreviewPickerHeard] =
+    useState<string | null>(null);
+
+  const PREVIEW_MOCK_PRODUCT: ApiProduct = {
+    id: 4,
+    code: 'TO-MINI',
+    name: 'Teh Ori Mini',
+    emoji: null,
+    image_url: null,
+    price: 3000,
+    discount_price: null,
+    minimal_discount: null,
+    is_active: true,
+    is_available: true,
+  };
+
+  const PREVIEW_PICKER_CANDIDATES = [
+    { product: PREVIEW_MOCK_PRODUCT, score: 0.72 },
+    {
+      product: { ...PREVIEW_MOCK_PRODUCT, id: 5, code: 'TO-JUMBO', name: 'Teh Ori Jumbo', price: 5000 },
+      score: 0.71,
+    },
+    {
+      product: { ...PREVIEW_MOCK_PRODUCT, id: 6, code: 'TS-MINI', name: 'Teh Susu Mini', price: 4000 },
+      score: 0.48,
+    },
+  ];
 
   /* ── Preferences ── */
   const theme = usePreferences((s) => s.theme);
@@ -460,6 +509,204 @@ export default function SettingsScreen() {
             onPress={() => router.push(ROUTES.settingsAbout)}
           />
         </SettingsSection>
+
+        {/* ═══ VOICE UI PREVIEW (Dev Only) ═══ */}
+        {__DEV__ ? (
+          <SettingsSection title="🔧 Dev: Voice UI Preview" icon={Mic}>
+            <View className="gap-2 p-4">
+              <Text className="mb-2 font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
+                Tap tombol untuk test tampilan voice components.
+              </Text>
+
+              {/* FAB Preview */}
+              <View className="flex-row flex-wrap gap-2">
+                {(['idle', 'listening', 'processing', 'paused'] as const).map(
+                  (s) => (
+                    <Pressable
+                      key={s}
+                      onPress={() => {
+                        setPreviewFabState(s);
+                        setPreviewFabVisible(true);
+                      }}
+                      className={`rounded-full border px-3 py-1.5 ${previewFabState === s
+                        ? 'border-primary bg-primary/10 dark:border-sage-500 dark:bg-sage-500/10'
+                        : 'border-border/60 bg-white dark:border-stone-700 dark:bg-stone-900'
+                        }`}
+                    >
+                      <Text
+                        className={`font-dm-semibold text-[11px] ${previewFabState === s
+                          ? 'text-primary dark:text-sage-400'
+                          : 'text-foreground dark:text-stone-50'
+                          }`}
+                      >
+                        FAB: {s}
+                      </Text>
+                    </Pressable>
+                  ),
+                )}
+              </View>
+
+              {/* Hide FAB + indicator */}
+              {previewFabVisible ? (
+                <Pressable
+                  onPress={() => setPreviewFabVisible(false)}
+                  className="rounded-full border border-destructive/60 bg-white px-3 py-1.5 active:opacity-70 dark:bg-stone-900"
+                >
+                  <Text className="font-dm-semibold text-[11px] text-destructive dark:text-red-400">
+                    Sembunyikan FAB
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {/* Modals & Toast */}
+              <View className="flex-row flex-wrap gap-2 pt-2">
+                <Pressable
+                  onPress={() => {
+                    setPreviewConfirmVoiceAnswer(null);
+                    setPreviewConfirmHeard(null);
+                    setPreviewConfirmOpen(true);
+                  }}
+                  className="rounded-full border border-border/60 bg-white px-3 py-1.5 active:opacity-70 dark:border-stone-700 dark:bg-stone-900"
+                >
+                  <Text className="font-dm-semibold text-[11px] text-foreground dark:text-stone-50">
+                    Confirm Modal
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setPreviewPickerVoiceIndex(null);
+                    setPreviewPickerHeard(null);
+                    setPreviewPickerOpen(true);
+                  }}
+                  className="rounded-full border border-border/60 bg-white px-3 py-1.5 active:opacity-70 dark:border-stone-700 dark:bg-stone-900"
+                >
+                  <Text className="font-dm-semibold text-[11px] text-foreground dark:text-stone-50">
+                    Picker Modal
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() =>
+                    setPreviewUndo({
+                      message: 'Teh Ori Mini × 2 ditambahkan',
+                      onUndo: () => {
+                        // dev preview — no real undo
+                      },
+                    })
+                  }
+                  className="rounded-full border border-border/60 bg-white px-3 py-1.5 active:opacity-70 dark:border-stone-700 dark:bg-stone-900"
+                >
+                  <Text className="font-dm-semibold text-[11px] text-foreground dark:text-stone-50">
+                    Undo Toast
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* ⭐ Test voice answer — khusus dev preview */}
+              <View className="mt-2 gap-1">
+                <Text className="font-dm-semibold text-[10px] uppercase tracking-wider text-muted-foreground dark:text-stone-400">
+                  Test Voice Answer
+                </Text>
+                <View className="flex-row flex-wrap gap-1.5">
+                  <Pressable
+                    onPress={() => {
+                      setPreviewConfirmVoiceAnswer('yes');
+                      setPreviewConfirmHeard('ya');
+                    }}
+                    disabled={!previewConfirmOpen}
+                    className={`rounded-full px-2.5 py-1 ${previewConfirmOpen
+                        ? 'bg-emerald-100 active:opacity-70 dark:bg-emerald-950/60'
+                        : 'bg-muted/40 dark:bg-stone-800/40'
+                      }`}
+                  >
+                    <Text className="font-dm-semibold text-[10px] text-emerald-700 dark:text-emerald-400">
+                      ✓ "ya"
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setPreviewConfirmVoiceAnswer('no');
+                      setPreviewConfirmHeard('tidak');
+                    }}
+                    disabled={!previewConfirmOpen}
+                    className={`rounded-full px-2.5 py-1 ${previewConfirmOpen
+                        ? 'bg-destructive/10 active:opacity-70 dark:bg-red-500/15'
+                        : 'bg-muted/40 dark:bg-stone-800/40'
+                      }`}
+                  >
+                    <Text className="font-dm-semibold text-[10px] text-destructive dark:text-red-400">
+                      ✗ "tidak"
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setPreviewPickerVoiceIndex(1);
+                      setPreviewPickerHeard('satu');
+                    }}
+                    disabled={!previewPickerOpen}
+                    className={`rounded-full px-2.5 py-1 ${previewPickerOpen
+                        ? 'bg-primary/10 active:opacity-70 dark:bg-sage-500/15'
+                        : 'bg-muted/40 dark:bg-stone-800/40'
+                      }`}
+                  >
+                    <Text className="font-dm-semibold text-[10px] text-primary dark:text-sage-400">
+                      1: "satu"
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setPreviewPickerVoiceIndex(2);
+                      setPreviewPickerHeard('dua');
+                    }}
+                    disabled={!previewPickerOpen}
+                    className={`rounded-full px-2.5 py-1 ${previewPickerOpen
+                        ? 'bg-primary/10 active:opacity-70 dark:bg-sage-500/15'
+                        : 'bg-muted/40 dark:bg-stone-800/40'
+                      }`}
+                  >
+                    <Text className="font-dm-semibold text-[10px] text-primary dark:text-sage-400">
+                      2: "dua"
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setPreviewPickerVoiceIndex(3);
+                      setPreviewPickerHeard('tiga');
+                    }}
+                    disabled={!previewPickerOpen}
+                    className={`rounded-full px-2.5 py-1 ${previewPickerOpen
+                        ? 'bg-primary/10 active:opacity-70 dark:bg-sage-500/15'
+                        : 'bg-muted/40 dark:bg-stone-800/40'
+                      }`}
+                  >
+                    <Text className="font-dm-semibold text-[10px] text-primary dark:text-sage-400">
+                      3: "tiga"
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </SettingsSection>
+        ) : null}
+
+        {/* ═══ VOICE FAB OVERLAY (Dev Only) ═══ */}
+        {__DEV__ && previewFabVisible ? (
+          <>
+            <VoiceFab
+              state={previewFabState}
+              onPress={() => {
+                // dev preview — cycle state
+                const next: VoiceFabState[] = ['idle', 'listening', 'processing', 'paused'];
+                const idx = next.indexOf(previewFabState);
+                setPreviewFabState(next[(idx + 1) % next.length]);
+              }}
+              bottomOffset={insets.bottom + 100}
+            />
+            <VoiceListeningIndicator
+              visible={previewFabState === 'listening'}
+              bottomOffset={insets.bottom + 100}
+            />
+          </>
+        ) : null}
       </ScrollView>
 
       <GlassHeader>
@@ -508,18 +755,16 @@ export default function SettingsScreen() {
                   setVoiceIdlePickerOpen(false);
                 }}
                 accessibilityRole="button"
-                className={`flex-row items-center justify-between px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${
-                  i < VOICE_IDLE_OPTIONS.length - 1
-                    ? 'border-b border-border/40 dark:border-stone-800/60'
-                    : ''
-                }`}
+                className={`flex-row items-center justify-between px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${i < VOICE_IDLE_OPTIONS.length - 1
+                  ? 'border-b border-border/40 dark:border-stone-800/60'
+                  : ''
+                  }`}
               >
                 <Text
-                  className={`font-dm-medium text-sm ${
-                    selected
-                      ? 'text-primary dark:text-sage-400'
-                      : 'text-foreground dark:text-stone-50'
-                  }`}
+                  className={`font-dm-medium text-sm ${selected
+                    ? 'text-primary dark:text-sage-400'
+                    : 'text-foreground dark:text-stone-50'
+                    }`}
                 >
                   {opt.label}
                 </Text>
@@ -561,6 +806,62 @@ export default function SettingsScreen() {
         onConfirm={confirmQuickPay}
         onCancel={() => setQuickPayConfirmOpen(false)}
       />
+
+      {/* ═══ VOICE PREVIEW MODALS (Dev Only) ═══ */}
+      {__DEV__ ? (
+        <>
+          <VoiceConfirmModal
+            visible={previewConfirmOpen}
+            product={PREVIEW_MOCK_PRODUCT}
+            quantity={2}
+            originalText="teh ori mini 2"
+            onCancel={() => {
+              setPreviewConfirmOpen(false);
+              setPreviewConfirmVoiceAnswer(null);
+              setPreviewConfirmHeard(null);
+            }}
+            onConfirm={() => {
+              setPreviewConfirmOpen(false);
+              setPreviewConfirmVoiceAnswer(null);
+              setPreviewConfirmHeard(null);
+              setPreviewUndo({
+                message: 'Teh Ori Mini × 2 ditambahkan',
+                onUndo: () => { },
+              });
+            }}
+            voiceAnswer={previewConfirmVoiceAnswer}
+            heardText={previewConfirmHeard}
+            listening={previewConfirmOpen && !previewConfirmVoiceAnswer}
+          />
+          <VoicePickerModal
+            visible={previewPickerOpen}
+            candidates={PREVIEW_PICKER_CANDIDATES}
+            quantity={3}
+            originalText="teh ori 3"
+            onCancel={() => {
+              setPreviewPickerOpen(false);
+              setPreviewPickerVoiceIndex(null);
+              setPreviewPickerHeard(null);
+            }}
+            onPick={(product) => {
+              setPreviewPickerOpen(false);
+              setPreviewPickerVoiceIndex(null);
+              setPreviewPickerHeard(null);
+              setPreviewUndo({
+                message: `${product.name} × 3 ditambahkan`,
+                onUndo: () => { },
+              });
+            }}
+            voiceIndex={previewPickerVoiceIndex}
+            heardText={previewPickerHeard}
+            listening={previewPickerOpen && previewPickerVoiceIndex === null}
+          />
+          <VoiceUndoToast
+            state={previewUndo}
+            onHide={() => setPreviewUndo(null)}
+          />
+        </>
+      ) : null}
     </Screen>
   );
 }

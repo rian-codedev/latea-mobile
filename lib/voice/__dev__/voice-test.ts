@@ -65,6 +65,87 @@ const TEST_CASES = [
   '2',
 ];
 
+import {
+  parseConfirmAnswer,
+  parsePickerAnswer,
+} from '../answer-parser';
+
+const CONFIRM_TEST_CASES: { text: string; expect: 'yes' | 'no' | null }[] = [
+  { text: 'ya', expect: 'yes' },
+  { text: 'iya', expect: 'yes' },
+  { text: 'oke', expect: 'yes' },
+  { text: 'tambah', expect: 'yes' },
+  { text: 'tidak', expect: 'no' },
+  { text: 'bukan', expect: 'no' },
+  { text: 'batal', expect: 'no' },
+  { text: 'salah', expect: 'no' },
+  { text: 'ya deh', expect: 'yes' },
+  { text: 'tidak tambah', expect: 'no' },
+  { text: 'random', expect: null },
+  { text: '', expect: null },
+];
+
+const PICKER_TEST_CASES: {
+  text: string;
+  count: number;
+  expect: { kind: 'index'; value: number } | { kind: 'cancel' } | null;
+}[] = [
+    { text: 'satu', count: 3, expect: { kind: 'index', value: 1 } },
+    { text: 'dua', count: 3, expect: { kind: 'index', value: 2 } },
+    { text: 'tiga', count: 3, expect: { kind: 'index', value: 3 } },
+    { text: '1', count: 3, expect: { kind: 'index', value: 1 } },
+    { text: '2', count: 3, expect: { kind: 'index', value: 2 } },
+    { text: 'pertama', count: 3, expect: { kind: 'index', value: 1 } },
+    { text: 'ketiga', count: 3, expect: { kind: 'index', value: 3 } },
+    { text: 'empat', count: 3, expect: null },
+    { text: 'empat', count: 5, expect: { kind: 'index', value: 4 } },
+    { text: 'batal', count: 3, expect: { kind: 'cancel' } },
+    { text: 'cancel', count: 3, expect: { kind: 'cancel' } },
+    { text: 'random', count: 3, expect: null },
+    { text: '', count: 3, expect: null },
+  ];
+
+export function runAnswerTests() {
+  /* eslint-disable no-console */
+  console.log('\n════════════════════════════════════════════');
+  console.log(`  CONFIRM ANSWER TESTS (${CONFIRM_TEST_CASES.length} cases)`);
+  console.log('════════════════════════════════════════════\n');
+
+  let pass = 0;
+  let fail = 0;
+
+  for (const tc of CONFIRM_TEST_CASES) {
+    const result = parseConfirmAnswer(tc.text);
+    const ok = result === tc.expect;
+    if (ok) pass++;
+    else fail++;
+    console.log(
+      `${ok ? '✅' : '❌'} "${tc.text}" → ${result} (expect ${tc.expect})`,
+    );
+  }
+
+  console.log(`\n  Confirm: ${pass} pass, ${fail} fail\n`);
+
+  pass = 0;
+  fail = 0;
+  console.log('════════════════════════════════════════════');
+  console.log(`  PICKER ANSWER TESTS (${PICKER_TEST_CASES.length} cases)`);
+  console.log('════════════════════════════════════════════\n');
+
+  for (const tc of PICKER_TEST_CASES) {
+    const result = parsePickerAnswer(tc.text, tc.count);
+    const ok = JSON.stringify(result) === JSON.stringify(tc.expect);
+    if (ok) pass++;
+    else fail++;
+    console.log(
+      `${ok ? '✅' : '❌'} "${tc.text}" (count=${tc.count}) → ${JSON.stringify(result)} (expect ${JSON.stringify(tc.expect)})`,
+    );
+  }
+
+  console.log(`\n  Picker: ${pass} pass, ${fail} fail\n`);
+  /* eslint-enable no-console */
+}
+
 export function runVoiceTests(products: ApiProduct[] = MOCK_PRODUCTS) {
   // eslint-disable-next-line no-console
   console.log('\n════════════════════════════════════════════');
@@ -94,4 +175,5 @@ export function runVoiceTests(products: ApiProduct[] = MOCK_PRODUCTS) {
   console.log(`  Summary: ${pass} parsed, ${fail} no-match`);
   // eslint-disable-next-line no-console
   console.log('════════════════════════════════════════════\n');
+  runAnswerTests();
 }
