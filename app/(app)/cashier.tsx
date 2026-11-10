@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   TextInput,
@@ -26,6 +26,7 @@ import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import { useResponsive, getGridColumns } from '@/lib/hooks/use-responsive';
 import { useProducts } from '@/lib/hooks/use-products';
+import { useVoiceCommand } from '@/lib/hooks/use-voice-command';
 import {
   fetchSaleDetail,
   createSale,
@@ -47,6 +48,11 @@ import { ProductCard } from '@/components/features/cashier/product-card';
 import { CartPanel } from '@/components/features/cashier/cart-panel';
 import { CheckoutModal } from '@/components/features/cashier/checkout-modal';
 import { FloatingCartBar } from '@/components/features/cashier/floating-cart-bar';
+import { VoiceFab } from '@/components/features/cashier/voice-fab';
+import { VoiceListeningIndicator } from '@/components/features/cashier/voice-listening-indicator';
+import { VoiceConfirmModal } from '@/components/features/cashier/voice-confirm-modal';
+import { VoicePickerModal } from '@/components/features/cashier/voice-picker-modal';
+import { VoiceUndoToast } from '@/components/features/cashier/voice-undo-toast';
 import {
   HEADER_HEIGHT,
   CART_BAR_HEIGHT,
@@ -70,12 +76,14 @@ export default function CashierScreen() {
   const { device, isTablet } = useResponsive();
   const cols = getGridColumns(device, 'catalog');
   const queryClient = useQueryClient();
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { colorScheme } = useColorScheme(); // ⭐ FIX
+  const isDark = colorScheme === 'dark'; // ⭐ FIX
 
-  /* ── Preferences ── */
   const checkoutModalEnabled = usePreferences((s) => s.checkoutModalEnabled);
   const keepAwakeEnabled = usePreferences((s) => s.keepAwakeEnabled);
+  const voiceEnabledPref = usePreferences((s) => s.voiceEnabled);
+  const voiceIdleSeconds = usePreferences((s) => s.voiceIdleSeconds);
+  const ttsEnabled = usePreferences((s) => s.ttsEnabled);
 
   const [search, setSearch] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
@@ -99,7 +107,40 @@ export default function CashierScreen() {
     : null;
   const isEditMode = !!editSaleId;
 
-  /* ── Keep Awake toggle ── */
+  /* ── Voice ── */
+  const voiceEnabled =
+    voiceEnabledPref && !isEditMode && apiProducts.length <= 50;
+
+  const {
+    state: voiceState,
+    isAvailable: voiceAvailable,
+    pendingConfirm,
+    pendingPicker,
+    heardText,
+    confirmAnswer,
+    pickerIndex,
+    answerListeningTimeout, 
+    undoState,
+    clearUndo,
+    toggle: toggleVoice,
+    handleConfirmYes,
+    handleConfirmNo,
+    handlePick,
+    handleCancelPick,
+  } = useVoiceCommand({
+    products: apiProducts,
+    enabled: voiceEnabled,
+    ttsEnabled,
+    autoPauseSeconds: voiceIdleSeconds,
+    onNoMatch: (reason, text) => {
+      if (reason === 'no-match-found' || reason === 'no-products') {
+        showToast(`Tidak dikenali: "${text}"`, 'error');
+      }
+      // reason lain (empty, only-wake-word, dll) silent
+    },
+  });
+
+  /* ── Keep Awake ── */
   useEffect(() => {
     if (!keepAwakeEnabled) return;
     activateKeepAwakeAsync('cashier').catch(() => {});
@@ -115,7 +156,7 @@ export default function CashierScreen() {
   const { total } = calcTotals(items);
   const itemCount = items.reduce((a, i) => a + i.quantity, 0);
 
-  /* ── Edit mode: fetch sale ── */
+  /* Edit mode: fetch sale */
   useEffect(() => {
     if (!editSaleId) {
       setEditSale(null);
@@ -132,7 +173,7 @@ export default function CashierScreen() {
     };
   }, [editSaleId]);
 
-  /* ── Edit mode: enrich cart ── */
+  /* Edit mode: enrich cart */
   useEffect(() => {
     if (!editSale || apiProducts.length === 0) return;
     clearCart();
@@ -215,7 +256,6 @@ export default function CashierScreen() {
     [isEditMode, showToast],
   );
 
-  /* ── Quick pay: langsung submit tanpa modal ── */
   const quickPay = useCallback(async () => {
     if (items.length === 0 || isProcessing) return;
     setIsProcessing(true);
@@ -256,7 +296,6 @@ export default function CashierScreen() {
       setCheckoutOpen(true);
       return;
     }
-
     void quickPay();
   }, [
     items.length,
@@ -274,6 +313,11 @@ export default function CashierScreen() {
   const isQuickPayMode = !checkoutModalEnabled && !isEditMode;
   const isSearching = search.trim().length > 0;
 
+  /* ── Voice FAB positioning ── */
+  const fabBottomOffset = isTablet
+    ? insets.bottom + 20
+    : CART_BAR_HEIGHT + insets.bottom + 24;
+
   return (
     <Screen>
       <View
@@ -288,7 +332,7 @@ export default function CashierScreen() {
               : 'flex-1'
           }
         >
-          {/* ─── Search Section ─── */}
+          {/* Search */}
           <View className="border-b border-border/30 bg-white px-4 pb-3 pt-3 dark:border-stone-800/60 dark:bg-stone-950">
             <View className="h-11 flex-row items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-4 dark:border-stone-700/60 dark:bg-stone-800/40">
               <Icon
@@ -321,8 +365,6 @@ export default function CashierScreen() {
                 </Pressable>
               ) : null}
             </View>
-
-            {/* Search result count */}
             {isSearching && !isLoading && !error ? (
               <Text className="mt-2 px-1 font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
                 {filtered.length} produk ditemukan
@@ -330,7 +372,7 @@ export default function CashierScreen() {
             ) : null}
           </View>
 
-          {/* ─── Grid Section ─── */}
+          {/* Grid */}
           <View className="flex-1 bg-muted/20 dark:bg-stone-900/40">
             <FlatList
               key={`cols-${cols}`}
@@ -343,7 +385,7 @@ export default function CashierScreen() {
                 gap: GRID_GAP,
                 paddingBottom: isTablet
                   ? 24
-                  : CART_BAR_HEIGHT + insets.bottom + 40,
+                  : CART_BAR_HEIGHT + insets.bottom + 100,
               }}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -434,6 +476,32 @@ export default function CashierScreen() {
         />
       ) : null}
 
+      {/* ═══ VOICE FAB ═══ */}
+      {voiceEnabled && voiceAvailable ? (
+        <VoiceFab
+          state={
+            voiceState === 'starting'
+              ? 'processing'
+              : voiceState === 'idle'
+              ? 'paused'
+              : voiceState === 'processing'
+              ? 'processing'
+              : voiceState === 'listening'
+              ? 'listening'
+              : 'paused'
+          }
+          onPress={() => void toggleVoice()}
+          bottomOffset={fabBottomOffset}
+          rightOffset={16}
+        />
+      ) : null}
+
+      <VoiceListeningIndicator
+        visible={voiceState === 'listening'}
+        bottomOffset={fabBottomOffset}
+        rightOffset={16}
+      />
+
       {!isTablet ? (
         <Modal
           visible={cartOpen}
@@ -465,6 +533,38 @@ export default function CashierScreen() {
         onSuccess={handleSubmitSuccess}
         editSaleId={editSaleId}
         isEditMode={isEditMode}
+      />
+
+      {/* ═══ VOICE MODALS ═══ */}
+      <VoiceConfirmModal
+        visible={!!pendingConfirm}
+        product={pendingConfirm?.product ?? null}
+        quantity={pendingConfirm?.quantity ?? 1}
+        originalText={pendingConfirm?.originalText ?? ''}
+        onCancel={handleConfirmNo}
+        onConfirm={handleConfirmYes}
+        voiceAnswer={confirmAnswer}
+        heardText={heardText}
+        listening={!!pendingConfirm && !confirmAnswer && !answerListeningTimeout}
+        listeningTimeout={answerListeningTimeout}
+      />
+
+      <VoicePickerModal
+        visible={!!pendingPicker}
+        candidates={pendingPicker?.candidates ?? []}
+        quantity={pendingPicker?.quantity ?? 1}
+        originalText={pendingPicker?.originalText ?? ''}
+        onCancel={handleCancelPick}
+        onPick={handlePick}
+        voiceIndex={pickerIndex}
+        heardText={heardText}
+        listening={!!pendingPicker && pickerIndex === null && !answerListeningTimeout}
+        listeningTimeout={answerListeningTimeout}
+      />
+
+      <VoiceUndoToast
+        state={undoState}
+        onHide={clearUndo}
       />
 
       <LoadingOverlay

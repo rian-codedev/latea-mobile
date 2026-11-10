@@ -1,7 +1,14 @@
 import { useMemo, useState } from 'react';
-import { ScrollView, View, Image, Pressable } from 'react-native';
+import {
+  ScrollView,
+  View,
+  Image,
+  Pressable,
+  ActivityIndicator,
+} from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Speech from 'expo-speech';
 import {
   ArrowLeft,
   Sun,
@@ -22,6 +29,9 @@ import {
   Timer,
   Volume2,
   Lightbulb,
+  AudioLines,
+  Gauge,
+  Play,
 } from 'lucide-react-native';
 
 import { Text } from '@/components/ui/text';
@@ -43,25 +53,23 @@ import {
   type ThemePreference,
 } from '@/lib/stores/preferences';
 import { useProducts } from '@/lib/hooks/use-products';
+import {
+  getIndonesianVoices,
+  speak,
+  speakPreview,
+} from '@/lib/voice/tts';
 import { ROUTES } from '@/lib/constants/app';
 import { HEADER_HEIGHT } from '@/lib/theme/sizing';
-
-import { VoiceFab, type VoiceFabState } from '@/components/features/cashier/voice-fab';
-import { VoiceListeningIndicator } from '@/components/features/cashier/voice-listening-indicator';
-import { VoiceConfirmModal } from '@/components/features/cashier/voice-confirm-modal';
-import { VoicePickerModal } from '@/components/features/cashier/voice-picker-modal';
-import { VoiceUndoToast, type VoiceUndoToastState } from '@/components/features/cashier/voice-undo-toast';
-import type { ApiProduct } from '@/lib/api/product';
 
 const THEMES: {
   value: ThemePreference;
   label: string;
   icon: typeof Sun;
 }[] = [
-    { value: 'system', label: 'Ikuti Sistem', icon: Smartphone },
-    { value: 'light', label: 'Terang', icon: Sun },
-    { value: 'dark', label: 'Gelap', icon: Moon },
-  ];
+  { value: 'system', label: 'Ikuti Sistem', icon: Smartphone },
+  { value: 'light', label: 'Terang', icon: Sun },
+  { value: 'dark', label: 'Gelap', icon: Moon },
+];
 
 const SESSION_TIMEOUT_OPTIONS: { value: number; label: string }[] = [
   { value: 30, label: '30 menit' },
@@ -78,51 +86,24 @@ const VOICE_IDLE_OPTIONS: { value: number; label: string }[] = [
   { value: 0, label: 'Nonaktif' },
 ];
 
+const VOICE_NO_SPEECH_OPTIONS: { value: number; label: string }[] = [
+  { value: 2, label: '2 detik' },
+  { value: 3, label: '3 detik' },
+  { value: 5, label: '5 detik' },
+  { value: 8, label: '8 detik' },
+];
+
+const TTS_RATE_OPTIONS: { value: number; label: string }[] = [
+  { value: 0.7, label: 'Lambat (0.7×)' },
+  { value: 0.85, label: 'Agak Lambat (0.85×)' },
+  { value: 1.0, label: 'Normal (1.0×)' },
+  { value: 1.15, label: 'Agak Cepat (1.15×)' },
+  { value: 1.3, label: 'Cepat (1.3×)' },
+];
+
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useSession();
-
-  /* ═══ VOICE PREVIEW STATE (Dev Only) ═══ */
-  const [previewFabState, setPreviewFabState] =
-    useState<VoiceFabState>('idle');
-  const [previewFabVisible, setPreviewFabVisible] = useState(false);
-  const [previewConfirmOpen, setPreviewConfirmOpen] = useState(false);
-  const [previewPickerOpen, setPreviewPickerOpen] = useState(false);
-  const [previewUndo, setPreviewUndo] = useState<VoiceUndoToastState>(null);
-
-  const [previewConfirmVoiceAnswer, setPreviewConfirmVoiceAnswer] =
-    useState<'yes' | 'no' | null>(null);
-  const [previewConfirmHeard, setPreviewConfirmHeard] =
-    useState<string | null>(null);
-  const [previewPickerVoiceIndex, setPreviewPickerVoiceIndex] =
-    useState<number | null>(null);
-  const [previewPickerHeard, setPreviewPickerHeard] =
-    useState<string | null>(null);
-
-  const PREVIEW_MOCK_PRODUCT: ApiProduct = {
-    id: 4,
-    code: 'TO-MINI',
-    name: 'Teh Ori Mini',
-    emoji: null,
-    image_url: null,
-    price: 3000,
-    discount_price: null,
-    minimal_discount: null,
-    is_active: true,
-    is_available: true,
-  };
-
-  const PREVIEW_PICKER_CANDIDATES = [
-    { product: PREVIEW_MOCK_PRODUCT, score: 0.72 },
-    {
-      product: { ...PREVIEW_MOCK_PRODUCT, id: 5, code: 'TO-JUMBO', name: 'Teh Ori Jumbo', price: 5000 },
-      score: 0.71,
-    },
-    {
-      product: { ...PREVIEW_MOCK_PRODUCT, id: 6, code: 'TS-MINI', name: 'Teh Susu Mini', price: 4000 },
-      score: 0.48,
-    },
-  ];
 
   /* ── Preferences ── */
   const theme = usePreferences((s) => s.theme);
@@ -143,10 +124,20 @@ export default function SettingsScreen() {
   const setVoiceEnabled = usePreferences((s) => s.setVoiceEnabled);
   const voiceIdleSeconds = usePreferences((s) => s.voiceIdleSeconds);
   const setVoiceIdleSeconds = usePreferences((s) => s.setVoiceIdleSeconds);
+  const voiceNoSpeechDelaySeconds = usePreferences(
+    (s) => s.voiceNoSpeechDelaySeconds,
+  );
+  const setVoiceNoSpeechDelaySeconds = usePreferences(
+    (s) => s.setVoiceNoSpeechDelaySeconds,
+  );
   const ttsEnabled = usePreferences((s) => s.ttsEnabled);
   const setTtsEnabled = usePreferences((s) => s.setTtsEnabled);
+  const ttsVoiceId = usePreferences((s) => s.ttsVoiceId);
+  const setTtsVoiceId = usePreferences((s) => s.setTtsVoiceId);
+  const ttsRate = usePreferences((s) => s.ttsRate);
+  const setTtsRate = usePreferences((s) => s.setTtsRate);
 
-  /* ── Products (for voice guard) ── */
+  /* ── Products / voice guard ── */
   const { data: products = [] } = useProducts(user?.store_id);
   const activeProductCount = useMemo(
     () => products.filter((p) => p.is_active).length,
@@ -157,8 +148,7 @@ export default function SettingsScreen() {
     if (!user?.store_id) {
       return {
         allowed: false,
-        message:
-          'Belum ada toko. Voice Command memerlukan produk.',
+        message: 'Belum ada toko. Voice Command memerlukan produk.',
       };
     }
     if (activeProductCount > 50) {
@@ -177,20 +167,45 @@ export default function SettingsScreen() {
     return { allowed: true };
   }, [user?.store_id, activeProductCount]);
 
-  /* ── Local state ── */
+  /* ── Modal state ── */
   const [keepAwakeConfirmOpen, setKeepAwakeConfirmOpen] = useState(false);
   const [quickPayConfirmOpen, setQuickPayConfirmOpen] = useState(false);
   const [voiceIdlePickerOpen, setVoiceIdlePickerOpen] = useState(false);
+  const [voiceNoSpeechPickerOpen, setVoiceNoSpeechPickerOpen] =
+    useState(false);
+  const [voicePickerOpen, setVoicePickerOpen] = useState(false);
+  const [ratePickerOpen, setRatePickerOpen] = useState(false);
+
+  /* ── TTS voice state ── */
+  const [voices, setVoices] = useState<Speech.Voice[]>([]);
+  const [isLoadingVoices, setIsLoadingVoices] = useState(false);
 
   const initial = (user?.name ?? 'K').charAt(0).toUpperCase();
   const storeInitial = (user?.store?.name ?? 'T').charAt(0).toUpperCase();
   const storeAvatarUrl = user?.store?.avatar_url;
 
+  /* ── Labels ── */
   const voiceIdleLabel = useMemo(() => {
     if (voiceIdleSeconds === 0) return 'Nonaktif';
     if (voiceIdleSeconds < 60) return `${voiceIdleSeconds} detik`;
     return `${voiceIdleSeconds / 60} menit`;
   }, [voiceIdleSeconds]);
+
+  const voiceNoSpeechLabel = useMemo(
+    () => `${voiceNoSpeechDelaySeconds} detik`,
+    [voiceNoSpeechDelaySeconds],
+  );
+
+  const voiceLabel = useMemo(() => {
+    if (!ttsVoiceId) return 'Sistem Default';
+    const v = voices.find((x) => x.identifier === ttsVoiceId);
+    return v?.name ?? 'Custom';
+  }, [ttsVoiceId, voices]);
+
+  const rateLabel = useMemo(() => {
+    const opt = TTS_RATE_OPTIONS.find((o) => o.value === ttsRate);
+    return opt?.label ?? `${ttsRate}×`;
+  }, [ttsRate]);
 
   /* ── Handlers ── */
   const handleKeepAwakeToggle = (value: boolean) => {
@@ -217,6 +232,35 @@ export default function SettingsScreen() {
   const confirmQuickPay = () => {
     setCheckoutModalEnabled(false);
     setQuickPayConfirmOpen(false);
+  };
+
+  const handleOpenVoicePicker = async () => {
+    setVoicePickerOpen(true);
+    if (voices.length > 0 || isLoadingVoices) return;
+
+    setIsLoadingVoices(true);
+    try {
+      const list = await getIndonesianVoices();
+      setVoices(list);
+    } finally {
+      setIsLoadingVoices(false);
+    }
+  };
+
+  const handleSelectVoice = (voiceId: string | null) => {
+    setTtsVoiceId(voiceId);
+    setVoicePickerOpen(false);
+    speakPreview('Teh Ori Mini dua ditambahkan', voiceId, ttsRate);
+  };
+
+  const handleSelectRate = (rate: number) => {
+    setTtsRate(rate);
+    setRatePickerOpen(false);
+    speakPreview('Teh Ori Mini dua ditambahkan', ttsVoiceId, rate);
+  };
+
+  const handleTestVoice = () => {
+    speak('Teh Ori Mini dua ditambahkan');
   };
 
   return (
@@ -368,9 +412,8 @@ export default function SettingsScreen() {
           />
         </SettingsSection>
 
-        {/* ═══ Suara ═══ */}
+        {/* ═══ Suara (Beta) ═══ */}
         <SettingsSection title="Suara" icon={Mic}>
-          {/* Guard warning (tidak allowed) */}
           {!voiceGuard.allowed ? (
             <View className="flex-row items-start gap-2 border-b border-border/40 bg-amber-50 px-4 py-3 dark:border-stone-800/60 dark:bg-amber-950/40">
               <Icon
@@ -384,7 +427,6 @@ export default function SettingsScreen() {
             </View>
           ) : null}
 
-          {/* Warning (allowed but degraded) */}
           {voiceGuard.allowed && voiceGuard.warning ? (
             <View className="flex-row items-start gap-2 border-b border-border/40 bg-amber-50 px-4 py-3 dark:border-stone-800/60 dark:bg-amber-950/40">
               <Icon
@@ -402,6 +444,7 @@ export default function SettingsScreen() {
             icon={Mic}
             label="Voice Command"
             description="Tambah produk lewat suara"
+            beta
             right={
               <SettingsSwitch
                 value={voiceEnabled && voiceGuard.allowed}
@@ -411,9 +454,27 @@ export default function SettingsScreen() {
             }
           />
 
-          {/* Progressive disclosure: sub-settings hanya jika voice ON */}
           {voiceEnabled && voiceGuard.allowed ? (
             <>
+              <SettingsDivider />
+              <SettingsRow
+                icon={Timer}
+                label="Jeda Restart Mikrofon"
+                description="Jeda sebelum mendengarkan lagi jika tidak ada suara"
+                onPress={() => setVoiceNoSpeechPickerOpen(true)}
+                right={
+                  <View className="flex-row items-center gap-1.5">
+                    <Text className="font-dm-medium text-xs text-muted-foreground dark:text-stone-400">
+                      {voiceNoSpeechLabel}
+                    </Text>
+                    <Icon
+                      as={ChevronRight}
+                      size={14}
+                      className="text-muted-foreground/60 dark:text-stone-500/60"
+                    />
+                  </View>
+                }
+              />
               <SettingsDivider />
               <SettingsRow
                 icon={Timer}
@@ -445,6 +506,60 @@ export default function SettingsScreen() {
                   />
                 }
               />
+
+              {ttsEnabled ? (
+                <>
+                  <SettingsDivider />
+                  <SettingsRow
+                    icon={AudioLines}
+                    label="Profil Suara"
+                    description="Pilih suara Google TTS"
+                    onPress={handleOpenVoicePicker}
+                    right={
+                      <View className="flex-row items-center gap-1.5">
+                        <Text
+                          className="max-w-[100px] font-dm-medium text-xs text-muted-foreground dark:text-stone-400"
+                          numberOfLines={1}
+                        >
+                          {voiceLabel}
+                        </Text>
+                        <Icon
+                          as={ChevronRight}
+                          size={14}
+                          className="text-muted-foreground/60 dark:text-stone-500/60"
+                        />
+                      </View>
+                    }
+                  />
+                  <SettingsDivider />
+                  <SettingsRow
+                    icon={Gauge}
+                    label="Kecepatan Suara"
+                    description="Atur tempo bicara TTS"
+                    onPress={() => setRatePickerOpen(true)}
+                    right={
+                      <View className="flex-row items-center gap-1.5">
+                        <Text className="font-dm-medium text-xs text-muted-foreground dark:text-stone-400">
+                          {rateLabel}
+                        </Text>
+                        <Icon
+                          as={ChevronRight}
+                          size={14}
+                          className="text-muted-foreground/60 dark:text-stone-500/60"
+                        />
+                      </View>
+                    }
+                  />
+                  <SettingsDivider />
+                  <SettingsRow
+                    icon={Play}
+                    label="Test Suara"
+                    description="Dengarkan contoh dengan pengaturan ini"
+                    onPress={handleTestVoice}
+                  />
+                </>
+              ) : null}
+
               <SettingsDivider />
               <View className="bg-muted/20 px-4 py-3 dark:bg-stone-800/20">
                 <View className="flex-row items-start gap-2">
@@ -509,204 +624,6 @@ export default function SettingsScreen() {
             onPress={() => router.push(ROUTES.settingsAbout)}
           />
         </SettingsSection>
-
-        {/* ═══ VOICE UI PREVIEW (Dev Only) ═══ */}
-        {__DEV__ ? (
-          <SettingsSection title="🔧 Dev: Voice UI Preview" icon={Mic}>
-            <View className="gap-2 p-4">
-              <Text className="mb-2 font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
-                Tap tombol untuk test tampilan voice components.
-              </Text>
-
-              {/* FAB Preview */}
-              <View className="flex-row flex-wrap gap-2">
-                {(['idle', 'listening', 'processing', 'paused'] as const).map(
-                  (s) => (
-                    <Pressable
-                      key={s}
-                      onPress={() => {
-                        setPreviewFabState(s);
-                        setPreviewFabVisible(true);
-                      }}
-                      className={`rounded-full border px-3 py-1.5 ${previewFabState === s
-                        ? 'border-primary bg-primary/10 dark:border-sage-500 dark:bg-sage-500/10'
-                        : 'border-border/60 bg-white dark:border-stone-700 dark:bg-stone-900'
-                        }`}
-                    >
-                      <Text
-                        className={`font-dm-semibold text-[11px] ${previewFabState === s
-                          ? 'text-primary dark:text-sage-400'
-                          : 'text-foreground dark:text-stone-50'
-                          }`}
-                      >
-                        FAB: {s}
-                      </Text>
-                    </Pressable>
-                  ),
-                )}
-              </View>
-
-              {/* Hide FAB + indicator */}
-              {previewFabVisible ? (
-                <Pressable
-                  onPress={() => setPreviewFabVisible(false)}
-                  className="rounded-full border border-destructive/60 bg-white px-3 py-1.5 active:opacity-70 dark:bg-stone-900"
-                >
-                  <Text className="font-dm-semibold text-[11px] text-destructive dark:text-red-400">
-                    Sembunyikan FAB
-                  </Text>
-                </Pressable>
-              ) : null}
-
-              {/* Modals & Toast */}
-              <View className="flex-row flex-wrap gap-2 pt-2">
-                <Pressable
-                  onPress={() => {
-                    setPreviewConfirmVoiceAnswer(null);
-                    setPreviewConfirmHeard(null);
-                    setPreviewConfirmOpen(true);
-                  }}
-                  className="rounded-full border border-border/60 bg-white px-3 py-1.5 active:opacity-70 dark:border-stone-700 dark:bg-stone-900"
-                >
-                  <Text className="font-dm-semibold text-[11px] text-foreground dark:text-stone-50">
-                    Confirm Modal
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setPreviewPickerVoiceIndex(null);
-                    setPreviewPickerHeard(null);
-                    setPreviewPickerOpen(true);
-                  }}
-                  className="rounded-full border border-border/60 bg-white px-3 py-1.5 active:opacity-70 dark:border-stone-700 dark:bg-stone-900"
-                >
-                  <Text className="font-dm-semibold text-[11px] text-foreground dark:text-stone-50">
-                    Picker Modal
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() =>
-                    setPreviewUndo({
-                      message: 'Teh Ori Mini × 2 ditambahkan',
-                      onUndo: () => {
-                        // dev preview — no real undo
-                      },
-                    })
-                  }
-                  className="rounded-full border border-border/60 bg-white px-3 py-1.5 active:opacity-70 dark:border-stone-700 dark:bg-stone-900"
-                >
-                  <Text className="font-dm-semibold text-[11px] text-foreground dark:text-stone-50">
-                    Undo Toast
-                  </Text>
-                </Pressable>
-              </View>
-
-              {/* ⭐ Test voice answer — khusus dev preview */}
-              <View className="mt-2 gap-1">
-                <Text className="font-dm-semibold text-[10px] uppercase tracking-wider text-muted-foreground dark:text-stone-400">
-                  Test Voice Answer
-                </Text>
-                <View className="flex-row flex-wrap gap-1.5">
-                  <Pressable
-                    onPress={() => {
-                      setPreviewConfirmVoiceAnswer('yes');
-                      setPreviewConfirmHeard('ya');
-                    }}
-                    disabled={!previewConfirmOpen}
-                    className={`rounded-full px-2.5 py-1 ${previewConfirmOpen
-                        ? 'bg-emerald-100 active:opacity-70 dark:bg-emerald-950/60'
-                        : 'bg-muted/40 dark:bg-stone-800/40'
-                      }`}
-                  >
-                    <Text className="font-dm-semibold text-[10px] text-emerald-700 dark:text-emerald-400">
-                      ✓ "ya"
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      setPreviewConfirmVoiceAnswer('no');
-                      setPreviewConfirmHeard('tidak');
-                    }}
-                    disabled={!previewConfirmOpen}
-                    className={`rounded-full px-2.5 py-1 ${previewConfirmOpen
-                        ? 'bg-destructive/10 active:opacity-70 dark:bg-red-500/15'
-                        : 'bg-muted/40 dark:bg-stone-800/40'
-                      }`}
-                  >
-                    <Text className="font-dm-semibold text-[10px] text-destructive dark:text-red-400">
-                      ✗ "tidak"
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      setPreviewPickerVoiceIndex(1);
-                      setPreviewPickerHeard('satu');
-                    }}
-                    disabled={!previewPickerOpen}
-                    className={`rounded-full px-2.5 py-1 ${previewPickerOpen
-                        ? 'bg-primary/10 active:opacity-70 dark:bg-sage-500/15'
-                        : 'bg-muted/40 dark:bg-stone-800/40'
-                      }`}
-                  >
-                    <Text className="font-dm-semibold text-[10px] text-primary dark:text-sage-400">
-                      1: "satu"
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      setPreviewPickerVoiceIndex(2);
-                      setPreviewPickerHeard('dua');
-                    }}
-                    disabled={!previewPickerOpen}
-                    className={`rounded-full px-2.5 py-1 ${previewPickerOpen
-                        ? 'bg-primary/10 active:opacity-70 dark:bg-sage-500/15'
-                        : 'bg-muted/40 dark:bg-stone-800/40'
-                      }`}
-                  >
-                    <Text className="font-dm-semibold text-[10px] text-primary dark:text-sage-400">
-                      2: "dua"
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      setPreviewPickerVoiceIndex(3);
-                      setPreviewPickerHeard('tiga');
-                    }}
-                    disabled={!previewPickerOpen}
-                    className={`rounded-full px-2.5 py-1 ${previewPickerOpen
-                        ? 'bg-primary/10 active:opacity-70 dark:bg-sage-500/15'
-                        : 'bg-muted/40 dark:bg-stone-800/40'
-                      }`}
-                  >
-                    <Text className="font-dm-semibold text-[10px] text-primary dark:text-sage-400">
-                      3: "tiga"
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          </SettingsSection>
-        ) : null}
-
-        {/* ═══ VOICE FAB OVERLAY (Dev Only) ═══ */}
-        {__DEV__ && previewFabVisible ? (
-          <>
-            <VoiceFab
-              state={previewFabState}
-              onPress={() => {
-                // dev preview — cycle state
-                const next: VoiceFabState[] = ['idle', 'listening', 'processing', 'paused'];
-                const idx = next.indexOf(previewFabState);
-                setPreviewFabState(next[(idx + 1) % next.length]);
-              }}
-              bottomOffset={insets.bottom + 100}
-            />
-            <VoiceListeningIndicator
-              visible={previewFabState === 'listening'}
-              bottomOffset={insets.bottom + 100}
-            />
-          </>
-        ) : null}
       </ScrollView>
 
       <GlassHeader>
@@ -729,7 +646,7 @@ export default function SettingsScreen() {
         </View>
       </GlassHeader>
 
-      {/* Voice idle timeout picker */}
+      {/* ─── Voice idle picker ─── */}
       <BaseModal
         visible={voiceIdlePickerOpen}
         onClose={() => setVoiceIdlePickerOpen(false)}
@@ -755,16 +672,18 @@ export default function SettingsScreen() {
                   setVoiceIdlePickerOpen(false);
                 }}
                 accessibilityRole="button"
-                className={`flex-row items-center justify-between px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${i < VOICE_IDLE_OPTIONS.length - 1
-                  ? 'border-b border-border/40 dark:border-stone-800/60'
-                  : ''
-                  }`}
+                className={`flex-row items-center justify-between px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${
+                  i < VOICE_IDLE_OPTIONS.length - 1
+                    ? 'border-b border-border/40 dark:border-stone-800/60'
+                    : ''
+                }`}
               >
                 <Text
-                  className={`font-dm-medium text-sm ${selected
-                    ? 'text-primary dark:text-sage-400'
-                    : 'text-foreground dark:text-stone-50'
-                    }`}
+                  className={`font-dm-medium text-sm ${
+                    selected
+                      ? 'text-primary dark:text-sage-400'
+                      : 'text-foreground dark:text-stone-50'
+                  }`}
                 >
                   {opt.label}
                 </Text>
@@ -781,7 +700,231 @@ export default function SettingsScreen() {
         </View>
       </BaseModal>
 
-      {/* Confirm Keep Awake */}
+      {/* ─── Voice no-speech picker ─── */}
+      <BaseModal
+        visible={voiceNoSpeechPickerOpen}
+        onClose={() => setVoiceNoSpeechPickerOpen(false)}
+        align="center"
+        maxWidth={320}
+      >
+        <View className="w-full overflow-hidden rounded-2xl bg-white dark:bg-stone-900">
+          <View className="border-b border-border/40 px-4 py-3 dark:border-stone-800/60">
+            <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
+              Jeda Restart Mikrofon
+            </Text>
+            <Text className="mt-0.5 font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
+              Lebih lama = lebih toleran terhadap kesunyian
+            </Text>
+          </View>
+          {VOICE_NO_SPEECH_OPTIONS.map((opt, i) => {
+            const selected = voiceNoSpeechDelaySeconds === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                onPress={() => {
+                  setVoiceNoSpeechDelaySeconds(opt.value);
+                  setVoiceNoSpeechPickerOpen(false);
+                }}
+                accessibilityRole="button"
+                className={`flex-row items-center justify-between px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${
+                  i < VOICE_NO_SPEECH_OPTIONS.length - 1
+                    ? 'border-b border-border/40 dark:border-stone-800/60'
+                    : ''
+                }`}
+              >
+                <Text
+                  className={`font-dm-medium text-sm ${
+                    selected
+                      ? 'text-primary dark:text-sage-400'
+                      : 'text-foreground dark:text-stone-50'
+                  }`}
+                >
+                  {opt.label}
+                </Text>
+                {selected ? (
+                  <Icon
+                    as={Check}
+                    size={18}
+                    className="text-primary dark:text-sage-400"
+                  />
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </BaseModal>
+
+      {/* ─── TTS Voice picker ─── */}
+      <BaseModal
+        visible={voicePickerOpen}
+        onClose={() => setVoicePickerOpen(false)}
+        align="center"
+        maxWidth={380}
+      >
+        <View className="w-full overflow-hidden rounded-2xl bg-white dark:bg-stone-900">
+          <View className="border-b border-border/40 px-4 py-3 dark:border-stone-800/60">
+            <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
+              Profil Suara
+            </Text>
+            <Text className="mt-0.5 font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
+              Pilih voice Google TTS bahasa Indonesia
+            </Text>
+          </View>
+
+          {/* System default */}
+          <Pressable
+            onPress={() => handleSelectVoice(null)}
+            accessibilityRole="button"
+            className={`flex-row items-center justify-between px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${
+              voices.length > 0
+                ? 'border-b border-border/40 dark:border-stone-800/60'
+                : ''
+            }`}
+          >
+            <View className="flex-1">
+              <Text
+                className={`font-dm-medium text-sm ${
+                  !ttsVoiceId
+                    ? 'text-primary dark:text-sage-400'
+                    : 'text-foreground dark:text-stone-50'
+                }`}
+              >
+                Sistem Default
+              </Text>
+              <Text className="mt-0.5 font-dm-regular text-[10px] text-muted-foreground dark:text-stone-400">
+                Voice otomatis dari Android
+              </Text>
+            </View>
+            {!ttsVoiceId ? (
+              <Icon
+                as={Check}
+                size={18}
+                className="text-primary dark:text-sage-400"
+              />
+            ) : null}
+          </Pressable>
+
+          {isLoadingVoices ? (
+            <View className="items-center gap-2 px-4 py-6">
+              <ActivityIndicator size="small" />
+              <Text className="font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
+                Memuat voice...
+              </Text>
+            </View>
+          ) : null}
+
+          {!isLoadingVoices && voices.length === 0 ? (
+            <View className="gap-1 px-4 py-6">
+              <View className="flex-row items-start gap-2">
+                <Icon
+                  as={AlertTriangle}
+                  size={14}
+                  className="mt-0.5 text-amber-700 dark:text-amber-400"
+                />
+                <Text className="flex-1 font-dm-regular text-[11px] leading-4 text-amber-800 dark:text-amber-300">
+                  Voice Indonesia tidak terinstall. Buka Settings Android →
+                  Accessibility → Text-to-speech output → Google TTS →
+                  Install voice data → Indonesian.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          {!isLoadingVoices &&
+            voices.map((v, i) => {
+              const isSelected = ttsVoiceId === v.identifier;
+              return (
+                <Pressable
+                  key={v.identifier}
+                  onPress={() => handleSelectVoice(v.identifier)}
+                  accessibilityRole="button"
+                  className={`flex-row items-center justify-between px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${
+                    i < voices.length - 1
+                      ? 'border-b border-border/40 dark:border-stone-800/60'
+                      : ''
+                  }`}
+                >
+                  <View className="flex-1 pr-2">
+                    <Text
+                      className={`font-dm-medium text-sm ${
+                        isSelected
+                          ? 'text-primary dark:text-sage-400'
+                          : 'text-foreground dark:text-stone-50'
+                      }`}
+                      numberOfLines={1}
+                    >
+                      {v.name || v.identifier}
+                    </Text>
+                    <Text className="mt-0.5 font-dm-regular text-[10px] text-muted-foreground dark:text-stone-400">
+                      {v.language}
+                      {v.quality ? ` · ${v.quality}` : ''}
+                    </Text>
+                  </View>
+                  {isSelected ? (
+                    <Icon
+                      as={Check}
+                      size={18}
+                      className="text-primary dark:text-sage-400"
+                    />
+                  ) : null}
+                </Pressable>
+              );
+            })}
+        </View>
+      </BaseModal>
+
+      {/* ─── TTS Rate picker ─── */}
+      <BaseModal
+        visible={ratePickerOpen}
+        onClose={() => setRatePickerOpen(false)}
+        align="center"
+        maxWidth={340}
+      >
+        <View className="w-full overflow-hidden rounded-2xl bg-white dark:bg-stone-900">
+          <View className="border-b border-border/40 px-4 py-3 dark:border-stone-800/60">
+            <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
+              Kecepatan Suara
+            </Text>
+            <Text className="mt-0.5 font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
+              Semakin cepat, semakin singkat feedback
+            </Text>
+          </View>
+          {TTS_RATE_OPTIONS.map((opt, i) => {
+            const selected = ttsRate === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                onPress={() => handleSelectRate(opt.value)}
+                accessibilityRole="button"
+                className={`flex-row items-center justify-between px-4 py-3 active:bg-muted/40 dark:active:bg-stone-800/40 ${
+                  i < TTS_RATE_OPTIONS.length - 1
+                    ? 'border-b border-border/40 dark:border-stone-800/60'
+                    : ''
+                }`}
+              >
+                <Text
+                  className={`font-dm-medium text-sm ${
+                    selected
+                      ? 'text-primary dark:text-sage-400'
+                      : 'text-foreground dark:text-stone-50'
+                  }`}
+                >
+                  {opt.label}
+                </Text>
+                {selected ? (
+                  <Icon
+                    as={Check}
+                    size={18}
+                    className="text-primary dark:text-sage-400"
+                  />
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </BaseModal>
+
+      {/* ─── Confirm modals ─── */}
       <ConfirmModal
         visible={keepAwakeConfirmOpen}
         icon={Monitor}
@@ -794,7 +937,6 @@ export default function SettingsScreen() {
         onCancel={() => setKeepAwakeConfirmOpen(false)}
       />
 
-      {/* Confirm Quick Pay */}
       <ConfirmModal
         visible={quickPayConfirmOpen}
         icon={Zap}
@@ -806,62 +948,6 @@ export default function SettingsScreen() {
         onConfirm={confirmQuickPay}
         onCancel={() => setQuickPayConfirmOpen(false)}
       />
-
-      {/* ═══ VOICE PREVIEW MODALS (Dev Only) ═══ */}
-      {__DEV__ ? (
-        <>
-          <VoiceConfirmModal
-            visible={previewConfirmOpen}
-            product={PREVIEW_MOCK_PRODUCT}
-            quantity={2}
-            originalText="teh ori mini 2"
-            onCancel={() => {
-              setPreviewConfirmOpen(false);
-              setPreviewConfirmVoiceAnswer(null);
-              setPreviewConfirmHeard(null);
-            }}
-            onConfirm={() => {
-              setPreviewConfirmOpen(false);
-              setPreviewConfirmVoiceAnswer(null);
-              setPreviewConfirmHeard(null);
-              setPreviewUndo({
-                message: 'Teh Ori Mini × 2 ditambahkan',
-                onUndo: () => { },
-              });
-            }}
-            voiceAnswer={previewConfirmVoiceAnswer}
-            heardText={previewConfirmHeard}
-            listening={previewConfirmOpen && !previewConfirmVoiceAnswer}
-          />
-          <VoicePickerModal
-            visible={previewPickerOpen}
-            candidates={PREVIEW_PICKER_CANDIDATES}
-            quantity={3}
-            originalText="teh ori 3"
-            onCancel={() => {
-              setPreviewPickerOpen(false);
-              setPreviewPickerVoiceIndex(null);
-              setPreviewPickerHeard(null);
-            }}
-            onPick={(product) => {
-              setPreviewPickerOpen(false);
-              setPreviewPickerVoiceIndex(null);
-              setPreviewPickerHeard(null);
-              setPreviewUndo({
-                message: `${product.name} × 3 ditambahkan`,
-                onUndo: () => { },
-              });
-            }}
-            voiceIndex={previewPickerVoiceIndex}
-            heardText={previewPickerHeard}
-            listening={previewPickerOpen && previewPickerVoiceIndex === null}
-          />
-          <VoiceUndoToast
-            state={previewUndo}
-            onHide={() => setPreviewUndo(null)}
-          />
-        </>
-      ) : null}
     </Screen>
   );
 }

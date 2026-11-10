@@ -35,6 +35,8 @@
     "expo-linking": "~57.0.13",
     "expo-router": "~57.0.30",
     "expo-secure-store": "~57.0.4",
+    "expo-speech": "~57.0.3",
+    "expo-speech-recognition": "^58.0.1",
     "expo-splash-screen": "~57.0.11",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
@@ -58,6 +60,7 @@
   "devDependencies": {
     "@babel/core": "^7.26.0",
     "@types/react": "~19.2.10",
+    "patch-package": "^8.0.1",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "react-native-svg-transformer": "^1.5.3",

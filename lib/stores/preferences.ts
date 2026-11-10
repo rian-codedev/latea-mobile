@@ -11,7 +11,10 @@ type PreferencesState = {
   sessionIdleMinutes: number;
   voiceEnabled: boolean;
   voiceIdleSeconds: number;
+  voiceNoSpeechDelaySeconds: number;
   ttsEnabled: boolean;
+  ttsVoiceId: string | null;      // ⭐ NEW
+  ttsRate: number;                // ⭐ NEW
   _hasHydrated: boolean;
 
   setTheme: (theme: ThemePreference) => void;
@@ -20,7 +23,10 @@ type PreferencesState = {
   setSessionIdleMinutes: (v: number) => void;
   setVoiceEnabled: (v: boolean) => void;
   setVoiceIdleSeconds: (v: number) => void;
+  setVoiceNoSpeechDelaySeconds: (v: number) => void;
   setTtsEnabled: (v: boolean) => void;
+  setTtsVoiceId: (v: string | null) => void;   // ⭐ NEW
+  setTtsRate: (v: number) => void;             // ⭐ NEW
   setHasHydrated: (v: boolean) => void;
 };
 
@@ -33,7 +39,10 @@ export const usePreferences = create<PreferencesState>()(
       sessionIdleMinutes: 60,
       voiceEnabled: false,
       voiceIdleSeconds: 120,
+      voiceNoSpeechDelaySeconds: 3,
       ttsEnabled: true,
+      ttsVoiceId: null,       // ⭐ null = pakai default system
+      ttsRate: 1.0,           // ⭐ normal
       _hasHydrated: false,
 
       setTheme: (theme) => set({ theme }),
@@ -42,12 +51,16 @@ export const usePreferences = create<PreferencesState>()(
       setSessionIdleMinutes: (v) => set({ sessionIdleMinutes: v }),
       setVoiceEnabled: (v) => set({ voiceEnabled: v }),
       setVoiceIdleSeconds: (v) => set({ voiceIdleSeconds: v }),
+      setVoiceNoSpeechDelaySeconds: (v) =>
+        set({ voiceNoSpeechDelaySeconds: v }),
       setTtsEnabled: (v) => set({ ttsEnabled: v }),
+      setTtsVoiceId: (v) => set({ ttsVoiceId: v }),
+      setTtsRate: (v) => set({ ttsRate: v }),
       setHasHydrated: (v) => set({ _hasHydrated: v }),
     }),
     {
       name: 'latea-preferences',
-      version: 3,
+      version: 5,
       storage: createJSONStorage(() => AsyncStorage),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
@@ -68,6 +81,17 @@ export const usePreferences = create<PreferencesState>()(
         }
         if (typeof persisted.ttsEnabled !== 'boolean') {
           persisted.ttsEnabled = true;
+        }
+        // v3 → v4
+        if (typeof persisted.voiceNoSpeechDelaySeconds !== 'number') {
+          persisted.voiceNoSpeechDelaySeconds = 3;
+        }
+        // v4 → v5
+        if (typeof persisted.ttsRate !== 'number') {
+          persisted.ttsRate = 1.0;
+        }
+        if (!('ttsVoiceId' in persisted)) {
+          persisted.ttsVoiceId = null;
         }
         return persisted;
       },

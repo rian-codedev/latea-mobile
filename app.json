@@ -7,18 +7,24 @@
     "icon": "./assets/images/icon.png",
     "scheme": "latea-pos-mobile",
     "userInterfaceStyle": "automatic",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Aplikasi memerlukan akses mikrofon untuk voice command.",
+        "NSSpeechRecognitionUsageDescription": "Aplikasi memerlukan speech recognition untuk voice command."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundImage": "./assets/images/adaptive-icon.png"
       },
-      "package": "com.riyancode.lateaapp"
+      "package": "com.riyancode.lateaapp",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -38,16 +44,20 @@
       ],
       "expo-status-bar",
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Aplikasi memerlukan akses galeri untuk upload foto profil.",
+          "cameraPermission": "Aplikasi memerlukan akses kamera untuk mengambil foto profil."
+        }
+      ],
+      "expo-speech-recognition"
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
+    "experiments": { "typedRoutes": true },
     "extra": {
       "router": {},
-      "eas": {
-        "projectId": "86241233-bc46-47f3-8070-a5fb3302b59e"
-      }
+      "eas": { "projectId": "86241233-bc46-47f3-8070-a5fb3302b59e" }
     },
     "owner": "riyan-code"
   }

@@ -10,6 +10,7 @@ export function SettingsRow({
   right,
   onPress,
   danger,
+  beta,
 }: {
   icon?: LucideIcon;
   label: string;
@@ -17,6 +18,7 @@ export function SettingsRow({
   right?: React.ReactNode;
   onPress?: () => void;
   danger?: boolean;
+  beta?: boolean;
 }) {
   const content = (
     <>
@@ -40,15 +42,24 @@ export function SettingsRow({
         </View>
       ) : null}
       <View className="flex-1">
-        <Text
-          className={`font-dm-semibold text-[13px] ${
-            danger
-              ? 'text-destructive dark:text-red-400'
-              : 'text-foreground dark:text-stone-50'
-          }`}
-        >
-          {label}
-        </Text>
+        <View className="flex-row items-center gap-1.5">
+          <Text
+            className={`font-dm-semibold text-[13px] ${
+              danger
+                ? 'text-destructive dark:text-red-400'
+                : 'text-foreground dark:text-stone-50'
+            }`}
+          >
+            {label}
+          </Text>
+          {beta ? (
+            <View className="rounded-full bg-amber-100 px-1.5 py-px dark:bg-amber-950/60">
+              <Text className="font-dm-bold text-[8px] uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                Beta
+              </Text>
+            </View>
+          ) : null}
+        </View>
         {description ? (
           <Text className="mt-0.5 font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
             {description}

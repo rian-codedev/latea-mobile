@@ -19,6 +19,7 @@ export function VoicePickerModal({
   voiceIndex = null,
   heardText = null,
   listening = false,
+  listeningTimeout = false,   // ⭐ NEW
 }: {
   visible: boolean;
   candidates: MatchedCandidate[];
@@ -26,10 +27,10 @@ export function VoicePickerModal({
   originalText: string;
   onCancel: () => void;
   onPick: (product: MatchedCandidate['product']) => void;
-  /** 1-based index → auto-select + auto-confirm setelah delay */
   voiceIndex?: number | null;
   heardText?: string | null;
   listening?: boolean;
+  listeningTimeout?: boolean;  // ⭐ NEW
 }) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
@@ -80,39 +81,29 @@ export function VoicePickerModal({
     >
       <View className="w-full overflow-hidden rounded-3xl bg-white dark:bg-stone-900">
         {/* Header */}
-        <View className="flex-row items-center gap-2.5 border-b border-border/40 px-5 py-4 dark:border-stone-800/60">
-          <View className="size-9 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/60">
-            <Icon
-              as={Mic}
-              size={16}
-              className="text-amber-700 dark:text-amber-400"
-            />
-          </View>
-          <View className="flex-1">
-            <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
-              Pilih Produk
+        <View className="flex-row items-center gap-1.5">
+          {listeningTimeout ? (
+            <Text className="font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
+              Tap kandidat atau tombol Pilih
             </Text>
-            <View className="flex-row items-center gap-1.5">
-              {listening && voiceIndex === null ? (
-                <>
-                  <ActivityIndicator
-                    size="small"
-                    color="#B45309"
-                    style={{ transform: [{ scale: 0.7 }] }}
-                  />
-                  <Text className="font-dm-regular text-[11px] text-amber-700 dark:text-amber-400">
-                    Ucapkan "satu", "dua", atau "tiga"
-                  </Text>
-                </>
-              ) : (
-                <Text className="font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
-                  {voiceIndex !== null
-                    ? 'Pilihan terdeteksi'
-                    : 'Ucapkan nomor atau tap produk'}
-                </Text>
-              )}
-            </View>
-          </View>
+          ) : listening && voiceIndex === null ? (
+            <>
+              <ActivityIndicator
+                size="small"
+                color="#B45309"
+                style={{ transform: [{ scale: 0.7 }] }}
+              />
+              <Text className="font-dm-regular text-[11px] text-amber-700 dark:text-amber-400">
+                Ucapkan "satu", "dua", atau "tiga"
+              </Text>
+            </>
+          ) : (
+            <Text className="font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
+              {voiceIndex !== null
+                ? 'Pilihan terdeteksi'
+                : 'Ucapkan nomor atau tap produk'}
+            </Text>
+          )}
         </View>
 
         {/* Body */}

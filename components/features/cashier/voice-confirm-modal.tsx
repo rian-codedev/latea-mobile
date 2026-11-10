@@ -19,6 +19,7 @@ export function VoiceConfirmModal({
   voiceAnswer = null,
   heardText = null,
   listening = false,
+  listeningTimeout = false,   // ⭐ NEW
 }: {
   visible: boolean;
   product: ApiProduct | null;
@@ -26,12 +27,10 @@ export function VoiceConfirmModal({
   originalText: string;
   onCancel: () => void;
   onConfirm: () => void;
-  /** 'yes' / 'no' — auto-execute setelah delay */
   voiceAnswer?: 'yes' | 'no' | null;
-  /** Teks yang didengar dari user (feedback) */
   heardText?: string | null;
-  /** Sedang mendengarkan jawaban */
   listening?: boolean;
+  listeningTimeout?: boolean;  // ⭐ NEW
 }) {
   /* ⭐ Auto-execute setelah voiceAnswer terdeteksi */
   useEffect(() => {
@@ -61,39 +60,27 @@ export function VoiceConfirmModal({
     >
       <View className="w-full overflow-hidden rounded-3xl bg-white dark:bg-stone-900">
         {/* Header */}
-        <View className="flex-row items-center gap-2.5 border-b border-border/40 px-5 py-4 dark:border-stone-800/60">
-          <View className="size-9 items-center justify-center rounded-full bg-primary/10 dark:bg-sage-500/15">
-            <Icon
-              as={Mic}
-              size={16}
-              className="text-primary dark:text-sage-400"
-            />
-          </View>
-          <View className="flex-1">
-            <Text className="font-dm-bold text-sm text-foreground dark:text-stone-50">
-              Konfirmasi Perintah
+        <View className="flex-row items-center gap-1.5">
+          {listeningTimeout ? (
+            <Text className="font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
+              Tap tombol di bawah untuk memilih
             </Text>
-            <View className="flex-row items-center gap-1.5">
-              {listening && !voiceAnswer ? (
-                <>
-                  <ActivityIndicator
-                    size="small"
-                    color="#84A98C"
-                    style={{ transform: [{ scale: 0.7 }] }}
-                  />
-                  <Text className="font-dm-regular text-[11px] text-primary dark:text-sage-400">
-                    Mendengarkan jawaban...
-                  </Text>
-                </>
-              ) : (
-                <Text className="font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
-                  {voiceAnswer
-                    ? 'Jawaban terdeteksi'
-                    : 'Ucapkan "ya" atau "tidak"'}
-                </Text>
-              )}
-            </View>
-          </View>
+          ) : listening && !voiceAnswer ? (
+            <>
+              <ActivityIndicator
+                size="small"
+                color="#84A98C"
+                style={{ transform: [{ scale: 0.7 }] }}
+              />
+              <Text className="font-dm-regular text-[11px] text-primary dark:text-sage-400">
+                Mendengarkan jawaban...
+              </Text>
+            </>
+          ) : (
+            <Text className="font-dm-regular text-[11px] text-muted-foreground dark:text-stone-400">
+              {voiceAnswer ? 'Jawaban terdeteksi' : 'Ucapkan "ya" atau "tidak"'}
+            </Text>
+          )}
         </View>
 
         {/* Body */}
