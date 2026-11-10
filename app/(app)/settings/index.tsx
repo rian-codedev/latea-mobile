@@ -15,6 +15,8 @@ import {
   AlertTriangle,
   Palette,
   Wallet,
+  Shield,
+  Clock,
   ChevronRight,
 } from 'lucide-react-native';
 
@@ -37,7 +39,6 @@ import {
 } from '@/lib/stores/preferences';
 import { ROUTES } from '@/lib/constants/app';
 import { HEADER_HEIGHT } from '@/lib/theme/sizing';
-import { UserAvatar } from '@/components/common/user-avatar';
 
 const THEMES: {
   value: ThemePreference;
@@ -47,6 +48,13 @@ const THEMES: {
   { value: 'system', label: 'Ikuti Sistem', icon: Smartphone },
   { value: 'light', label: 'Terang', icon: Sun },
   { value: 'dark', label: 'Gelap', icon: Moon },
+];
+
+const SESSION_TIMEOUT_OPTIONS: { value: number; label: string }[] = [
+  { value: 30, label: '30 menit' },
+  { value: 60, label: '1 jam' },
+  { value: 120, label: '2 jam' },
+  { value: 0, label: 'Nonaktif' },
 ];
 
 export default function SettingsScreen() {
@@ -62,6 +70,10 @@ export default function SettingsScreen() {
   );
   const setCheckoutModalEnabled = usePreferences(
     (s) => s.setCheckoutModalEnabled,
+  );
+  const sessionIdleMinutes = usePreferences((s) => s.sessionIdleMinutes);
+  const setSessionIdleMinutes = usePreferences(
+    (s) => s.setSessionIdleMinutes,
   );
 
   const [keepAwakeConfirmOpen, setKeepAwakeConfirmOpen] = useState(false);
@@ -108,7 +120,7 @@ export default function SettingsScreen() {
           gap: 20,
         }}
       >
-        {/* ═══ Card Profil — tap → Account ═══ */}
+        {/* ═══ Card Profil ═══ */}
         <Pressable
           onPress={() => router.push(ROUTES.settingsAccount)}
           accessibilityRole="button"
@@ -116,11 +128,19 @@ export default function SettingsScreen() {
           className="overflow-hidden rounded-2xl border border-border/40 bg-white active:bg-muted/40 dark:border-stone-800/60 dark:bg-stone-900 dark:active:bg-stone-800/40"
         >
           <View className="flex-row items-center gap-3 p-4">
-            <UserAvatar
-              name={user?.name ?? 'K'}
-              uri={user?.avatar_url}
-              size={56}
-            />
+            {user?.avatar_url ? (
+              <Image
+                source={{ uri: user.avatar_url }}
+                style={{ width: 56, height: 56, borderRadius: 28 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View className="size-14 items-center justify-center rounded-full bg-primary dark:bg-sage-500">
+                <Text className="font-dm-extrabold text-lg text-primary-foreground">
+                  {initial}
+                </Text>
+              </View>
+            )}
             <View className="flex-1">
               <Text
                 className="font-dm-bold text-base text-foreground dark:text-stone-50"
@@ -236,6 +256,39 @@ export default function SettingsScreen() {
               />
             }
           />
+        </SettingsSection>
+
+        {/* ═══ Keamanan ═══ */}
+        <SettingsSection title="Keamanan" icon={Shield}>
+          {SESSION_TIMEOUT_OPTIONS.map((opt, i) => {
+            const selected = sessionIdleMinutes === opt.value;
+            return (
+              <View key={opt.value}>
+                <SettingsRow
+                  icon={Clock}
+                  label={opt.label}
+                  description={
+                    opt.value === 0
+                      ? 'Aplikasi tidak akan logout otomatis'
+                      : undefined
+                  }
+                  onPress={() => setSessionIdleMinutes(opt.value)}
+                  right={
+                    selected ? (
+                      <Icon
+                        as={Check}
+                        size={18}
+                        className="text-primary dark:text-sage-400"
+                      />
+                    ) : undefined
+                  }
+                />
+                {i < SESSION_TIMEOUT_OPTIONS.length - 1 ? (
+                  <SettingsDivider />
+                ) : null}
+              </View>
+            );
+          })}
         </SettingsSection>
 
         {/* ═══ Tentang ═══ */}

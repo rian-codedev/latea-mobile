@@ -4,22 +4,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LogOut } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
+import type { ExpiredReason } from '@/lib/stores/session';
 
-/**
- * Toast global "Sesi berakhir" — muncul saat authExpired true,
- * auto-hide 3 detik kemudian, panggil onHide untuk reset flag.
- */
+const MESSAGES: Record<'token' | 'idle', string> = {
+  token: 'Sesi Anda telah berakhir. Silakan masuk kembali.',
+  idle: 'Anda tidak aktif terlalu lama. Silakan masuk kembali.',
+};
+
 export function AuthExpiredToast({
-  visible,
+  reason,
   onHide,
-  message = 'Sesi Anda telah berakhir. Silakan masuk kembali.',
 }: {
-  visible: boolean;
+  reason: ExpiredReason;
   onHide: () => void;
-  message?: string;
 }) {
   const insets = useSafeAreaInsets();
   const anim = useRef(new Animated.Value(0)).current;
+  const visible = !!reason;
 
   useEffect(() => {
     if (!visible) return;
@@ -40,12 +41,14 @@ export function AuthExpiredToast({
       }).start(({ finished }) => {
         if (finished) onHide();
       });
-    }, 3000);
+    }, 3500);
 
     return () => clearTimeout(timer);
   }, [visible, anim, onHide]);
 
   if (!visible) return null;
+
+  const message = MESSAGES[reason as 'token' | 'idle'];
 
   return (
     <Animated.View

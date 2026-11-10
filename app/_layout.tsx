@@ -1,6 +1,7 @@
 import '@/global.css';
 
 import { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { ThemeProvider } from 'expo-router/react-navigation';
 import { PortalHost } from '@rn-primitives/portal';
 import { Stack } from 'expo-router';
@@ -23,6 +24,7 @@ import { SessionProvider, useSession } from '@/lib/stores/session';
 import { usePreferences } from '@/lib/stores/preferences';
 import { useFirstLaunch } from '@/lib/hooks/use-first-launch';
 import { useThemeSync } from '@/lib/hooks/use-theme-sync';
+import { useIdleTimeout } from '@/lib/hooks/use-idle-timeout';
 import { LoadingSplash } from '@/components/feedback/loading-splash';
 import { AuthExpiredToast } from '@/components/feedback/auth-expired-toast';
 
@@ -48,9 +50,21 @@ const queryClient = new QueryClient({
 function RootNavigator() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { authExpired, clearAuthExpired } = useSession();
+  const {
+    user,
+    expiredReason,
+    clearExpiredReason,
+    expireIdle,
+  } = useSession();
 
   useThemeSync();
+
+  const sessionIdleMinutes = usePreferences((s) => s.sessionIdleMinutes);
+  const { bumpActivity } = useIdleTimeout({
+    enabled: !!user && sessionIdleMinutes > 0,
+    timeoutMs: sessionIdleMinutes * 60 * 1000,
+    onTimeout: expireIdle,
+  });
 
   const [fontsLoaded] = useFonts({
     DMSans_400Regular,
@@ -72,10 +86,12 @@ function RootNavigator() {
     }
   }, [fontsLoaded, isFirstLaunch]);
 
-  // ⭐ HAPUS effect router.replace('/(onboarding)')
-  // Redirect onboarding sekarang ditangani oleh (app)/_layout & (auth)/_layout
-
-  if (!fontsLoaded || isFirstLaunch === null || !appReady || !prefsHydrated) {
+  if (
+    !fontsLoaded ||
+    isFirstLaunch === null ||
+    !appReady ||
+    !prefsHydrated
+  ) {
     return <LoadingSplash />;
   }
 
@@ -83,17 +99,34 @@ function RootNavigator() {
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <ThemeProvider value={isDark ? NAV_THEME.dark : NAV_THEME.light}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(onboarding)" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(app)" />
-        </Stack>
+        {/*
+         * ⭐ Wrapper untuk deteksi interaksi user (bumpActivity).
+         * onStartShouldSetResponderCapture fires untuk SEMUA touch
+         * sebelum child menangkapnya. Return false = jangan ambil alih.
+         *
+         * Catatan: touch di dalam Modal TIDAK sampai ke wrapper ini
+         * (Modal di-render di root terpisah). Untuk MVP acceptable
+         * karena modal biasanya interaksi singkat.
+         */}
+        <View
+          style={{ flex: 1 }}
+          onStartShouldSetResponderCapture={() => {
+            bumpActivity();
+            return false;
+          }}
+        >
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(onboarding)" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(app)" />
+          </Stack>
+        </View>
         <PortalHost />
       </ThemeProvider>
 
       <AuthExpiredToast
-        visible={authExpired}
-        onHide={clearAuthExpired}
+        reason={expiredReason}
+        onHide={clearExpiredReason}
       />
     </>
   );
